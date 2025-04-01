@@ -103,12 +103,15 @@ export const useCertificates = () => {
   return useQuery({
     queryKey: ['certificates'],
     queryFn: legalService.getAllCertificates,
-    onError: (error) => {
-      toast({
-        title: "Error fetching certificates",
-        description: error instanceof Error ? error.message : "An unexpected error occurred",
-        variant: "destructive"
-      });
+    // Updated error handling approach
+    onSettled: (_data, error) => {
+      if (error) {
+        toast({
+          title: "Error fetching certificates",
+          description: error instanceof Error ? error.message : "An unexpected error occurred",
+          variant: "destructive"
+        });
+      }
     }
   });
 };

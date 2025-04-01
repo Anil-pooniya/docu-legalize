@@ -168,12 +168,28 @@ export const useDocuments = () => {
   return useQuery({
     queryKey: ['documents'],
     queryFn: documentService.getAllDocuments,
-    onError: (error) => {
-      toast({
-        title: "Error fetching documents",
-        description: error instanceof Error ? error.message : "An unexpected error occurred",
-        variant: "destructive"
-      });
+    // Updated error handling approach for newer react-query versions
+    meta: {
+      errorHandler: (error: Error) => {
+        toast({
+          title: "Error fetching documents",
+          description: error.message || "An unexpected error occurred",
+          variant: "destructive"
+        });
+      }
+    },
+    onSettled: (_data, error) => {
+      if (error) {
+        const errorHandler = error instanceof Error 
+          ? error.message 
+          : "An unexpected error occurred";
+          
+        toast({
+          title: "Error fetching documents",
+          description: errorHandler,
+          variant: "destructive"
+        });
+      }
     }
   });
 };
@@ -185,12 +201,19 @@ export const useDocument = (id: string) => {
     queryKey: ['document', id],
     queryFn: () => documentService.getDocumentById(id),
     enabled: !!id,
-    onError: (error) => {
-      toast({
-        title: "Error fetching document",
-        description: error instanceof Error ? error.message : "An unexpected error occurred",
-        variant: "destructive"
-      });
+    // Updated error handling approach for newer react-query versions
+    onSettled: (_data, error) => {
+      if (error) {
+        const errorHandler = error instanceof Error 
+          ? error.message 
+          : "An unexpected error occurred";
+          
+        toast({
+          title: "Error fetching document",
+          description: errorHandler,
+          variant: "destructive"
+        });
+      }
     }
   });
 };
