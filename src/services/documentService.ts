@@ -163,6 +163,44 @@ const documentService = {
         });
       }, 800);
     });
+  },
+  
+  // Extract text from document
+  extractText: async (id: string): Promise<{ text: string, documentId: string }> => {
+    // In a real app: return api.get(`/documents/${id}/extract`);
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        const document = MOCK_DOCUMENTS.find(doc => doc.id === id);
+        if (document) {
+          // If document has content, return it, otherwise generate generic text
+          const text = document.content || `Extracted text from ${document.name}. This would normally be the result of OCR processing.`;
+          resolve({
+            text,
+            documentId: id
+          });
+        } else {
+          reject(new Error('Document not found'));
+        }
+      }, 1500);
+    });
+  },
+  
+  // Download document
+  downloadDocument: async (id: string): Promise<Blob> => {
+    // In a real app: return api.get(`/documents/${id}/download`, { responseType: 'blob' });
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        const document = MOCK_DOCUMENTS.find(doc => doc.id === id);
+        if (document) {
+          // Create a sample text blob for download
+          const content = document.content || `Sample content for ${document.name}`;
+          const blob = new Blob([content], { type: 'text/plain' });
+          resolve(blob);
+        } else {
+          reject(new Error('Document not found'));
+        }
+      }, 800);
+    });
   }
 };
 
@@ -240,15 +278,59 @@ export const useGenerateCertificate = () => {
   
   return useMutation({
     mutationFn: documentService.generateCertificate,
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast({
         title: "Certificate generated",
-        description: "Section 65B certificate has been generated successfully.",
+        description: `Section 65B certificate has been generated successfully. ID: ${data.certificateId}`,
       });
     },
     onError: (error) => {
       toast({
         title: "Certificate generation failed",
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
+        variant: "destructive"
+      });
+    }
+  });
+};
+
+export const useExtractText = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  
+  return useMutation({
+    mutationFn: documentService.extractText,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      toast({
+        title: "Text extracted",
+        description: "Document text has been successfully extracted.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Text extraction failed",
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
+        variant: "destructive"
+      });
+    }
+  });
+};
+
+export const useDownloadDocument = () => {
+  const { toast } = useToast();
+  
+  return useMutation({
+    mutationFn: documentService.downloadDocument,
+    onSuccess: () => {
+      toast({
+        title: "Download started",
+        description: "Your document is being downloaded.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Download failed",
         description: error instanceof Error ? error.message : "An unexpected error occurred",
         variant: "destructive"
       });

@@ -1,19 +1,30 @@
 
-import React from "react";
+import React, { useState } from "react";
 import PageLayout from "@/components/layout/PageLayout";
 import Section65BCertificate from "@/components/certificates/Section65BCertificate";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PlusIcon, FileTextIcon, ArrowRightIcon } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/use-toast";
+import { useGenerateCertificate, useVerifyDocument } from "@/services/documentService";
 
 const Certificates = () => {
+  const [showCertificateDialog, setShowCertificateDialog] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
+  const { toast } = useToast();
+  
+  const handleGenerateNew = () => {
+    setShowCertificateDialog(true);
+  };
+
   return (
     <PageLayout>
       <div className="container mx-auto px-4">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-legal-primary">Legal Certificates</h1>
-          <Button className="bg-legal-primary hover:bg-legal-dark">
+          <Button className="bg-legal-primary hover:bg-legal-dark" onClick={handleGenerateNew}>
             <PlusIcon className="h-4 w-4 mr-2" />
             Generate New Certificate
           </Button>
@@ -40,7 +51,7 @@ const Certificates = () => {
               </div>
               
               <Button variant="outline" className="w-full text-legal-primary border-legal-primary" asChild>
-                <a href="https://indiankanoon.org/doc/13153/">
+                <a href="https://indiankanoon.org/doc/13153/" target="_blank" rel="noopener noreferrer">
                   Read Legal Text <ArrowRightIcon className="ml-1 h-4 w-4" />
                 </a>
               </Button>
@@ -102,7 +113,18 @@ const Certificates = () => {
                               <td className="p-3 text-sm">{cert.date}</td>
                               <td className="p-3 text-sm font-mono text-gray-600 hidden md:table-cell">{cert.verificationId}</td>
                               <td className="p-3">
-                                <Button variant="ghost" size="sm" className="text-legal-primary hover:text-legal-dark hover:bg-legal-light">
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="text-legal-primary hover:text-legal-dark hover:bg-legal-light"
+                                  onClick={() => {
+                                    setSelectedDocument(cert.document);
+                                    toast({
+                                      title: "Certificate loaded",
+                                      description: "Certificate is ready to view or download.",
+                                    });
+                                  }}
+                                >
                                   View
                                 </Button>
                               </td>
@@ -117,6 +139,41 @@ const Certificates = () => {
             </Tabs>
           </div>
         </div>
+
+        <Dialog open={showCertificateDialog} onOpenChange={setShowCertificateDialog}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Generate New Certificate</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-sm text-gray-500 mb-4">
+                Select a document to generate a new Section 65B certificate:
+              </p>
+              <div className="space-y-2">
+                {["Contract Agreement - ABC Corp.pdf", "Property Deed - 123 Main St.jpg", "Court Filing - Case #45678.pdf"].map((doc, i) => (
+                  <div key={i} className="flex items-center p-2 border rounded-md hover:bg-gray-50 cursor-pointer">
+                    <FileTextIcon className="h-5 w-5 text-legal-primary mr-2" />
+                    <span className="text-sm">{doc}</span>
+                    <Button 
+                      className="ml-auto" 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => {
+                        toast({
+                          title: "Certificate generated",
+                          description: `Certificate for ${doc} has been generated successfully.`,
+                        });
+                        setShowCertificateDialog(false);
+                      }}
+                    >
+                      Generate
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </PageLayout>
   );
