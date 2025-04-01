@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,20 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
       });
     }
   }, [error, toast]);
+
+  // Add the missing handleGenerateCertificate function
+  const handleGenerateCertificate = () => {
+    if (!document) return;
+    
+    certificateMutation.mutate({
+      documentId: document.id,
+      issuerDetails: {
+        name: "Current User", // This would come from the authenticated user in a real app
+        designation: "Document Owner",
+        organization: "DocuLegalize System"
+      }
+    });
+  };
 
   if (isLoading) {
     return (
