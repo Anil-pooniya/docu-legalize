@@ -1,10 +1,9 @@
-
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileTextIcon, DownloadIcon, PrinterIcon, CheckCircleIcon } from "lucide-react";
+import { FileText, DownloadIcon, PrinterIcon, CheckCircleIcon } from "lucide-react";
 
 interface DocumentPreviewProps {
   document?: {
@@ -84,7 +83,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ document }) => {
           <TabsContent value="preview" className="mt-0">
             <div className="document-preview border rounded-md overflow-hidden flex items-center justify-center p-6 h-96">
               <div className="text-center">
-                <FileTextIcon className="h-16 w-16 mx-auto text-legal-primary opacity-50 mb-4" />
+                <FileText className="h-16 w-16 mx-auto text-legal-primary opacity-50 mb-4" />
                 <p className="text-gray-500 text-sm">Document preview would be displayed here.</p>
                 <p className="text-gray-500 text-sm mt-1">PDF and image viewers would be implemented here.</p>
               </div>

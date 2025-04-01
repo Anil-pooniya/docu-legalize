@@ -3,9 +3,9 @@ import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  FileTextIcon,
+  FileIcon,
   FileImageIcon,
-  FilePdfIcon,
+  FileText,
   SearchIcon,
   ChevronDownIcon,
   CheckSquareIcon,
@@ -62,11 +62,11 @@ const MOCK_DOCUMENTS = [
 const getDocumentIcon = (type: string) => {
   switch (type) {
     case "pdf":
-      return <FilePdfIcon className="h-6 w-6 text-red-500" />;
+      return <FileText className="h-6 w-6 text-red-500" />;
     case "image":
       return <FileImageIcon className="h-6 w-6 text-blue-500" />;
     default:
-      return <FileTextIcon className="h-6 w-6 text-gray-500" />;
+      return <FileIcon className="h-6 w-6 text-gray-500" />;
   }
 };
 
