@@ -1,14 +1,32 @@
 
-import React from "react";
+import React, { useEffect } from "react";
 import PageLayout from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import DocumentUpload from "@/components/documents/DocumentUpload";
 import DocumentList from "@/components/documents/DocumentList";
 import { FileTextIcon, CheckCircleIcon, SearchIcon, ArrowRightIcon, GavelIcon } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 const Index = () => {
+  const location = useLocation();
+  
+  // Function to scroll to the upload section
+  const scrollToUpload = () => {
+    const uploadSection = document.getElementById("upload-section");
+    if (uploadSection) {
+      uploadSection.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+  
+  // Check if we should scroll to upload section (from URL parameter)
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    if (searchParams.get('upload') === 'true') {
+      setTimeout(scrollToUpload, 300); // Small delay to ensure DOM is ready
+    }
+  }, [location]);
+
   return (
     <PageLayout>
       <div className="container mx-auto px-4">
@@ -22,12 +40,14 @@ const Index = () => {
               with Section 65B of the Indian Evidence Act.
             </p>
             <div className="flex flex-wrap justify-center gap-3">
-              <Button className="bg-legal-primary hover:bg-legal-dark">
+              <Button className="bg-legal-primary hover:bg-legal-dark" onClick={scrollToUpload}>
                 <FileTextIcon className="mr-2 h-4 w-4" /> Upload Document
               </Button>
-              <Button variant="outline" className="border-legal-primary text-legal-primary hover:bg-legal-light">
-                <SearchIcon className="mr-2 h-4 w-4" /> Explore Documents
-              </Button>
+              <Link to="/documents">
+                <Button variant="outline" className="border-legal-primary text-legal-primary hover:bg-legal-light">
+                  <SearchIcon className="mr-2 h-4 w-4" /> Explore Documents
+                </Button>
+              </Link>
             </div>
           </div>
 
@@ -82,7 +102,7 @@ const Index = () => {
           </div>
         </section>
 
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+        <section id="upload-section" className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
           <DocumentUpload />
           <Card>
             <CardHeader>

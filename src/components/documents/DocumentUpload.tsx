@@ -6,12 +6,14 @@ import { Input } from "@/components/ui/input";
 import { UploadIcon, FileIcon, XIcon } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useUploadDocument } from "@/services/documentService";
+import { useNavigate } from "react-router-dom";
 
 const DocumentUpload: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const { toast } = useToast();
   const uploadMutation = useUploadDocument();
+  const navigate = useNavigate();
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -73,7 +75,13 @@ const DocumentUpload: React.FC = () => {
     
     try {
       await uploadMutation.mutateAsync(file);
+      toast({
+        title: "Upload successful",
+        description: "Your document has been uploaded and is being processed.",
+      });
       setFile(null);
+      // Navigate to the documents page after successful upload
+      navigate("/documents");
     } catch (error) {
       // Error is handled by the mutation
     }

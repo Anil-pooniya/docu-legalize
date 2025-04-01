@@ -1,12 +1,28 @@
-
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { GavelIcon, FileTextIcon, SearchIcon, MenuIcon, XIcon } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleUploadClick = () => {
+    if (location.pathname === '/') {
+      // If we're already on the home page, scroll to the upload section
+      const uploadSection = document.getElementById("upload-section");
+      if (uploadSection) {
+        uploadSection.scrollIntoView({ behavior: "smooth" });
+      }
+    } else {
+      // Otherwise navigate to the home page with a flag to scroll to upload section
+      navigate('/?upload=true');
+    }
+    // Close mobile menu if open
+    setIsMenuOpen(false);
+  };
 
   return (
     <header className="bg-white shadow-sm border-b">
@@ -47,7 +63,11 @@ const Header = () => {
             <SearchIcon className="h-4 w-4 mr-2" />
             Search
           </Button>
-          <Button size="sm" className="bg-legal-primary hover:bg-legal-dark">
+          <Button 
+            size="sm" 
+            className="bg-legal-primary hover:bg-legal-dark"
+            onClick={handleUploadClick}
+          >
             <FileTextIcon className="h-4 w-4 mr-2" />
             Upload Document
           </Button>
@@ -97,7 +117,10 @@ const Header = () => {
                 <SearchIcon className="h-4 w-4 mr-2" />
                 Search
               </Button>
-              <Button className="justify-start bg-legal-primary hover:bg-legal-dark">
+              <Button 
+                className="justify-start bg-legal-primary hover:bg-legal-dark"
+                onClick={handleUploadClick}
+              >
                 <FileTextIcon className="h-4 w-4 mr-2" />
                 Upload Document
               </Button>
