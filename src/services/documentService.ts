@@ -1,3 +1,4 @@
+
 import api from './api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/components/ui/use-toast';
@@ -17,7 +18,7 @@ export interface Document {
 // For now, we'll use mock data similar to what we have in DocumentList.tsx
 
 // Modified to let the array be updated
-let MOCK_DOCUMENTS = [
+let MOCK_DOCUMENTS: Document[] = [
   {
     id: "1",
     name: "Contract Agreement - ABC Corp.pdf",
@@ -120,6 +121,8 @@ const documentService = {
           size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
           date: new Date().toISOString().split('T')[0],
           verified: false,
+          // We're making content optional in the Document interface,
+          // so it's okay not to provide it here
         };
         
         // Add the new document to the MOCK_DOCUMENTS array so it shows up in the UI
