@@ -1,4 +1,3 @@
-
 import api from './api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/components/ui/use-toast';
@@ -168,20 +167,9 @@ export const useDocuments = () => {
   return useQuery({
     queryKey: ['documents'],
     queryFn: documentService.getAllDocuments,
-    // Updated error handling approach that is compatible with React Query v5
     staleTime: 60000, // example optional configuration
     gcTime: 300000,   // example optional configuration
     retry: 1,         // example optional configuration
-    onSuccess: (data) => {
-      console.log(`Successfully fetched ${data.length} documents`);
-    },
-    onError: (error) => {
-      toast({
-        title: "Error fetching documents",
-        description: error instanceof Error ? error.message : "An unexpected error occurred",
-        variant: "destructive"
-      });
-    }
   });
 };
 
@@ -192,14 +180,6 @@ export const useDocument = (id: string) => {
     queryKey: ['document', id],
     queryFn: () => documentService.getDocumentById(id),
     enabled: !!id,
-    // Updated error handling approach that is compatible with React Query v5
-    onError: (error) => {
-      toast({
-        title: "Error fetching document",
-        description: error instanceof Error ? error.message : "An unexpected error occurred",
-        variant: "destructive"
-      });
-    }
   });
 };
 

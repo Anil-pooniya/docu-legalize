@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { useDocuments, useVerifyDocument } from "@/services/documentService";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/use-toast";
 
 // Helper function to get the right icon
 const getDocumentIcon = (type: string) => {
@@ -33,6 +34,18 @@ const DocumentList: React.FC = () => {
   const [filterVerified, setFilterVerified] = useState<boolean | null>(null);
   const { data: documents, isLoading, error } = useDocuments();
   const verifyMutation = useVerifyDocument();
+  const { toast } = useToast();
+  
+  // Handle errors from the useDocuments hook
+  useEffect(() => {
+    if (error) {
+      toast({
+        title: "Error fetching documents",
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
+        variant: "destructive"
+      });
+    }
+  }, [error, toast]);
   
   const filteredDocuments = documents?.filter((doc) => {
     const matchesSearch = doc.name.toLowerCase().includes(searchTerm.toLowerCase());

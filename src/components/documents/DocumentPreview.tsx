@@ -1,5 +1,4 @@
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +7,7 @@ import { FileText, DownloadIcon, PrinterIcon, CheckCircleIcon } from "lucide-rea
 import { useDocument } from "@/services/documentService";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGenerateCertificate } from "@/services/legalService";
+import { useToast } from "@/components/ui/use-toast";
 
 interface DocumentPreviewProps {
   documentId?: string;
@@ -17,17 +17,17 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
   const { data: document, isLoading, error } = useDocument(documentId);
   const certificateMutation = useGenerateCertificate();
   const [activeTab, setActiveTab] = useState("preview");
-
-  const handleGenerateCertificate = () => {
-    certificateMutation.mutate({
-      documentId,
-      issuerDetails: {
-        name: "John Doe",
-        designation: "Legal Officer",
-        organization: "ABC Legal Services"
-      }
-    });
-  };
+  const { toast } = useToast();
+  
+  useEffect(() => {
+    if (error) {
+      toast({
+        title: "Error fetching document",
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
+        variant: "destructive"
+      });
+    }
+  }, [error, toast]);
 
   if (isLoading) {
     return (

@@ -1,4 +1,3 @@
-
 import api from './api';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useToast } from '@/components/ui/use-toast';
@@ -103,14 +102,6 @@ export const useCertificates = () => {
   return useQuery({
     queryKey: ['certificates'],
     queryFn: legalService.getAllCertificates,
-    // Updated error handling approach that is compatible with React Query v5
-    onError: (error) => {
-      toast({
-        title: "Error fetching certificates",
-        description: error instanceof Error ? error.message : "An unexpected error occurred",
-        variant: "destructive"
-      });
-    }
   });
 };
 
