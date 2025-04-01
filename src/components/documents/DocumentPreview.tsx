@@ -1,13 +1,11 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileText, DownloadIcon, PrinterIcon, CheckCircleIcon } from "lucide-react";
-import { useDocument } from "@/services/documentService";
+import { useDocument, useGenerateCertificate } from "@/services/documentService";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useGenerateCertificate } from "@/services/legalService";
 import { useToast } from "@/components/ui/use-toast";
 
 interface DocumentPreviewProps {
@@ -33,14 +31,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
   const handleGenerateCertificate = () => {
     if (!document) return;
     
-    certificateMutation.mutate({
-      documentId: document.id,
-      issuerDetails: {
-        name: "Current User", // This would come from the authenticated user in a real app
-        designation: "Document Owner",
-        organization: "DocuLegalize System"
-      }
-    });
+    certificateMutation.mutate(document.id);
   };
 
   if (isLoading) {
@@ -85,12 +76,14 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
             <CardTitle className="text-xl text-legal-primary mb-1">{document.name}</CardTitle>
             <CardDescription>
               Uploaded on {new Date(document.date).toLocaleDateString()} • {document.size}
-              {document.verified && (
-                <Badge className="ml-2 bg-green-100 text-green-800 border-green-300 font-medium">
-                  <CheckCircleIcon className="h-3.5 w-3.5 mr-1" />
-                  Verified
-                </Badge>
-              )}
+              <span className="ml-2">
+                {document.verified && (
+                  <Badge className="bg-green-100 text-green-800 border-green-300 font-medium">
+                    <CheckCircleIcon className="h-3.5 w-3.5 mr-1" />
+                    Verified
+                  </Badge>
+                )}
+              </span>
             </CardDescription>
           </div>
           <div className="flex space-x-2">

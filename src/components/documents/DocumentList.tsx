@@ -29,7 +29,15 @@ const getDocumentIcon = (type: string) => {
   }
 };
 
-const DocumentList: React.FC = () => {
+interface DocumentListProps {
+  selectedDocumentId?: string | null;
+  setSelectedDocumentId?: (id: string) => void;
+}
+
+const DocumentList: React.FC<DocumentListProps> = ({ 
+  selectedDocumentId,
+  setSelectedDocumentId 
+}) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterVerified, setFilterVerified] = useState<boolean | null>(null);
   const { data: documents, isLoading, error } = useDocuments();
@@ -55,6 +63,12 @@ const DocumentList: React.FC = () => {
 
   const handleVerify = (id: string) => {
     verifyMutation.mutate(id);
+  };
+
+  const handleDocumentSelect = (id: string) => {
+    if (setSelectedDocumentId) {
+      setSelectedDocumentId(id);
+    }
   };
 
   return (
@@ -127,7 +141,11 @@ const DocumentList: React.FC = () => {
               <TableBody>
                 {filteredDocuments.length > 0 ? (
                   filteredDocuments.map((doc) => (
-                    <TableRow key={doc.id}>
+                    <TableRow 
+                      key={doc.id} 
+                      className={selectedDocumentId === doc.id ? "bg-legal-light" : ""}
+                      onClick={() => handleDocumentSelect(doc.id)}
+                    >
                       <TableCell>
                         <div className="flex items-center">
                           {getDocumentIcon(doc.type)}
@@ -160,6 +178,10 @@ const DocumentList: React.FC = () => {
                             variant="ghost" 
                             size="sm" 
                             className="text-legal-primary hover:text-legal-dark hover:bg-legal-light"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDocumentSelect(doc.id);
+                            }}
                           >
                             View
                           </Button>
@@ -168,7 +190,10 @@ const DocumentList: React.FC = () => {
                               variant="outline"
                               size="sm"
                               className="border-legal-primary text-legal-primary hover:bg-legal-light"
-                              onClick={() => handleVerify(doc.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleVerify(doc.id);
+                              }}
                               disabled={verifyMutation.isPending}
                             >
                               Verify

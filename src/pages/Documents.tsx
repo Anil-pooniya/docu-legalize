@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import PageLayout from "@/components/layout/PageLayout";
 import DocumentList from "@/components/documents/DocumentList";
 import DocumentPreview from "@/components/documents/DocumentPreview";
@@ -13,7 +13,7 @@ const Documents = () => {
   const { data: documents } = useDocuments();
 
   // Select the first document by default if none is selected and documents are loaded
-  React.useEffect(() => {
+  useEffect(() => {
     if (!selectedDocumentId && documents && documents.length > 0) {
       setSelectedDocumentId(documents[0].id);
     }
@@ -24,7 +24,7 @@ const Documents = () => {
       <div className="container mx-auto px-4">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-legal-primary">Document Library</h1>
-          <Link to="/">
+          <Link to="/#upload-section">
             <Button className="bg-legal-primary hover:bg-legal-dark">
               <PlusIcon className="h-4 w-4 mr-2" />
               Upload New Document
@@ -34,7 +34,10 @@ const Documents = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           <div className="lg:col-span-2">
-            <DocumentList />
+            <DocumentList 
+              selectedDocumentId={selectedDocumentId}
+              setSelectedDocumentId={setSelectedDocumentId}
+            />
           </div>
           <div className="lg:col-span-3">
             <DocumentPreview documentId={selectedDocumentId || undefined} />

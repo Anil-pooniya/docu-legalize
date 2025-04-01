@@ -16,7 +16,8 @@ export interface Document {
 // In a real application, these would call actual API endpoints
 // For now, we'll use mock data similar to what we have in DocumentList.tsx
 
-const MOCK_DOCUMENTS = [
+// Modified to let the array be updated
+let MOCK_DOCUMENTS = [
   {
     id: "1",
     name: "Contract Agreement - ABC Corp.pdf",
@@ -121,8 +122,8 @@ const documentService = {
           verified: false,
         };
         
-        // In a real app, we would process the file for OCR here
-        // and update the backend database
+        // Add the new document to the MOCK_DOCUMENTS array so it shows up in the UI
+        MOCK_DOCUMENTS = [newDoc, ...MOCK_DOCUMENTS];
         
         resolve(newDoc);
       }, 1500);
@@ -137,6 +138,8 @@ const documentService = {
         const docIndex = MOCK_DOCUMENTS.findIndex(doc => doc.id === id);
         if (docIndex >= 0) {
           const updatedDoc = { ...MOCK_DOCUMENTS[docIndex], verified: true };
+          // Update the document in the array
+          MOCK_DOCUMENTS[docIndex] = updatedDoc;
           resolve(updatedDoc);
         } else {
           reject(new Error('Document not found'));
