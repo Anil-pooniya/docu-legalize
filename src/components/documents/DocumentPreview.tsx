@@ -30,7 +30,6 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
     }
   }, [error, toast]);
 
-  // Add the missing handleGenerateCertificate function
   const handleGenerateCertificate = () => {
     if (!document) return;
     
