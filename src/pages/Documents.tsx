@@ -6,10 +6,18 @@ import DocumentPreview from "@/components/documents/DocumentPreview";
 import { Button } from "@/components/ui/button";
 import { PlusIcon } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useDocuments } from "@/services/documentService";
 
 const Documents = () => {
-  // In a real app, we'd fetch the document list and handle document selection
-  const [selectedDocument, setSelectedDocument] = useState(null);
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
+  const { data: documents } = useDocuments();
+
+  // Select the first document by default if none is selected and documents are loaded
+  React.useEffect(() => {
+    if (!selectedDocumentId && documents && documents.length > 0) {
+      setSelectedDocumentId(documents[0].id);
+    }
+  }, [documents, selectedDocumentId]);
 
   return (
     <PageLayout>
@@ -29,7 +37,7 @@ const Documents = () => {
             <DocumentList />
           </div>
           <div className="lg:col-span-3">
-            <DocumentPreview />
+            <DocumentPreview documentId={selectedDocumentId || undefined} />
           </div>
         </div>
       </div>

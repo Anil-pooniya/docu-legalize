@@ -1,58 +1,77 @@
-import React from "react";
+
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileText, DownloadIcon, PrinterIcon, CheckCircleIcon } from "lucide-react";
+import { useDocument } from "@/services/documentService";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useGenerateCertificate } from "@/services/legalService";
 
 interface DocumentPreviewProps {
-  document?: {
-    id: string;
-    name: string;
-    uploadDate: string;
-    size: string;
-    verified: boolean;
-    content?: string;
-  };
+  documentId?: string;
 }
 
-const DocumentPreview: React.FC<DocumentPreviewProps> = ({ document }) => {
-  const mockDocument = document || {
-    id: "1",
-    name: "Contract Agreement - ABC Corp.pdf",
-    uploadDate: "Nov 15, 2023",
-    size: "2.4 MB",
-    verified: true,
-    content: `
-      THIS AGREEMENT made this 15th day of November, 2023
-      
-      BETWEEN:
-      
-      ABC CORPORATION, a corporation incorporated under the laws of India
-      (hereinafter referred to as "ABC")
-      
-      - and -
-      
-      XYZ LIMITED, a corporation incorporated under the laws of India
-      (hereinafter referred to as "XYZ")
-      
-      WHEREAS ABC and XYZ wish to enter into an agreement regarding the provision of legal services;
-      
-      AND WHEREAS both parties agree to the terms and conditions contained herein;
-      
-      NOW THEREFORE THIS AGREEMENT WITNESSES that in consideration of the mutual covenants and agreements herein and subject to the terms and conditions specified in this Agreement, the parties agree as follows:
-    `,
+const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) => {
+  const { data: document, isLoading, error } = useDocument(documentId);
+  const certificateMutation = useGenerateCertificate();
+  const [activeTab, setActiveTab] = useState("preview");
+
+  const handleGenerateCertificate = () => {
+    certificateMutation.mutate({
+      documentId,
+      issuerDetails: {
+        name: "John Doe",
+        designation: "Legal Officer",
+        organization: "ABC Legal Services"
+      }
+    });
   };
+
+  if (isLoading) {
+    return (
+      <Card className="w-full">
+        <CardHeader className="pb-3">
+          <div className="flex justify-between items-start">
+            <div>
+              <Skeleton className="h-6 w-[300px] mb-2" />
+              <Skeleton className="h-4 w-[200px]" />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-[400px] w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error || !document) {
+    return (
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle className="text-xl text-legal-primary">Document Preview</CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-center justify-center p-6">
+          <div className="text-center">
+            <p className="text-red-500 mb-2">Error loading document.</p>
+            <p className="text-gray-500 text-sm">Please select a valid document or try again later.</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="w-full">
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
           <div>
-            <CardTitle className="text-xl text-legal-primary mb-1">{mockDocument.name}</CardTitle>
+            <CardTitle className="text-xl text-legal-primary mb-1">{document.name}</CardTitle>
             <CardDescription>
-              Uploaded on {mockDocument.uploadDate} • {mockDocument.size}
-              {mockDocument.verified && (
+              Uploaded on {new Date(document.date).toLocaleDateString()} • {document.size}
+              {document.verified && (
                 <Badge className="ml-2 bg-green-100 text-green-800 border-green-300 font-medium">
                   <CheckCircleIcon className="h-3.5 w-3.5 mr-1" />
                   Verified
@@ -61,6 +80,17 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ document }) => {
             </CardDescription>
           </div>
           <div className="flex space-x-2">
+            {document.verified && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleGenerateCertificate}
+                disabled={certificateMutation.isPending}
+              >
+                <CheckCircleIcon className="h-4 w-4 mr-1.5" />
+                <span className="hidden sm:inline">Generate Certificate</span>
+              </Button>
+            )}
             <Button variant="outline" size="sm">
               <PrinterIcon className="h-4 w-4 mr-1.5" />
               <span className="hidden sm:inline">Print</span>
@@ -73,7 +103,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ document }) => {
         </div>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="preview" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="mb-4">
             <TabsTrigger value="preview">Document Preview</TabsTrigger>
             <TabsTrigger value="metadata">Metadata</TabsTrigger>
@@ -109,27 +139,27 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ document }) => {
               <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
                 <div>
                   <dt className="text-sm font-medium text-gray-500">File Name</dt>
-                  <dd className="mt-1 text-sm text-gray-900">{mockDocument.name}</dd>
+                  <dd className="mt-1 text-sm text-gray-900">{document.name}</dd>
                 </div>
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Upload Date</dt>
-                  <dd className="mt-1 text-sm text-gray-900">{mockDocument.uploadDate}</dd>
+                  <dd className="mt-1 text-sm text-gray-900">{new Date(document.date).toLocaleDateString()}</dd>
                 </div>
                 <div>
                   <dt className="text-sm font-medium text-gray-500">File Size</dt>
-                  <dd className="mt-1 text-sm text-gray-900">{mockDocument.size}</dd>
+                  <dd className="mt-1 text-sm text-gray-900">{document.size}</dd>
                 </div>
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Document Type</dt>
-                  <dd className="mt-1 text-sm text-gray-900">PDF Document</dd>
+                  <dd className="mt-1 text-sm text-gray-900">{document.type === 'pdf' ? 'PDF Document' : 'Image'}</dd>
                 </div>
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Created By</dt>
-                  <dd className="mt-1 text-sm text-gray-900">Adobe Acrobat</dd>
+                  <dd className="mt-1 text-sm text-gray-900">DocuLegalize System</dd>
                 </div>
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Modified Date</dt>
-                  <dd className="mt-1 text-sm text-gray-900">Nov 10, 2023</dd>
+                  <dd className="mt-1 text-sm text-gray-900">{new Date(document.date).toLocaleDateString()}</dd>
                 </div>
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Pages</dt>
@@ -138,7 +168,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ document }) => {
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Legal Status</dt>
                   <dd className="mt-1 text-sm text-gray-900">
-                    {mockDocument.verified ? (
+                    {document.verified ? (
                       <span className="text-green-600 font-medium">Section 65B Verified</span>
                     ) : (
                       <span className="text-amber-600 font-medium">Pending Verification</span>
@@ -152,7 +182,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ document }) => {
           <TabsContent value="textContent" className="mt-0">
             <div className="border rounded-md p-4 h-80 overflow-auto">
               <pre className="text-sm whitespace-pre-wrap font-sans">
-                {mockDocument.content || "No text content extracted."}
+                {document.content || "No text content extracted."}
               </pre>
             </div>
           </TabsContent>

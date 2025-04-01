@@ -7,56 +7,14 @@ import {
   FileImageIcon,
   FileText,
   SearchIcon,
-  ChevronDownIcon,
   CheckSquareIcon,
   XSquareIcon,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-
-// Mock document data
-const MOCK_DOCUMENTS = [
-  {
-    id: "1",
-    name: "Contract Agreement - ABC Corp.pdf",
-    type: "pdf",
-    size: "2.4 MB",
-    date: "2023-11-15",
-    verified: true,
-  },
-  {
-    id: "2",
-    name: "Property Deed - 123 Main St.jpg",
-    type: "image",
-    size: "1.8 MB",
-    date: "2023-11-12",
-    verified: true,
-  },
-  {
-    id: "3",
-    name: "Court Filing - Case #45678.pdf",
-    type: "pdf",
-    size: "3.1 MB",
-    date: "2023-11-08",
-    verified: false,
-  },
-  {
-    id: "4",
-    name: "Client Testimony - Smith v. Johnson.pdf",
-    type: "pdf",
-    size: "1.5 MB",
-    date: "2023-11-05",
-    verified: true,
-  },
-  {
-    id: "5",
-    name: "Evidence Photo #1 - Accident Scene.jpg",
-    type: "image",
-    size: "2.2 MB",
-    date: "2023-11-01",
-    verified: false,
-  },
-];
+import { useDocuments, useVerifyDocument } from "@/services/documentService";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // Helper function to get the right icon
 const getDocumentIcon = (type: string) => {
@@ -73,12 +31,18 @@ const getDocumentIcon = (type: string) => {
 const DocumentList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterVerified, setFilterVerified] = useState<boolean | null>(null);
+  const { data: documents, isLoading, error } = useDocuments();
+  const verifyMutation = useVerifyDocument();
   
-  const filteredDocuments = MOCK_DOCUMENTS.filter((doc) => {
+  const filteredDocuments = documents?.filter((doc) => {
     const matchesSearch = doc.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterVerified === null || doc.verified === filterVerified;
     return matchesSearch && matchesFilter;
-  });
+  }) || [];
+
+  const handleVerify = (id: string) => {
+    verifyMutation.mutate(id);
+  };
 
   return (
     <Card className="w-full">
@@ -119,62 +83,99 @@ const DocumentList: React.FC = () => {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="overflow-hidden rounded-md border">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-muted/50">
-                <th className="p-3 text-left text-sm font-medium text-muted-foreground">Name</th>
-                <th className="p-3 text-left text-sm font-medium text-muted-foreground hidden sm:table-cell">Date</th>
-                <th className="p-3 text-left text-sm font-medium text-muted-foreground hidden md:table-cell">Size</th>
-                <th className="p-3 text-left text-sm font-medium text-muted-foreground">Status</th>
-                <th className="p-3 text-left text-sm font-medium text-muted-foreground">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {filteredDocuments.length > 0 ? (
-                filteredDocuments.map((doc) => (
-                  <tr key={doc.id} className="hover:bg-muted/30">
-                    <td className="p-3">
-                      <div className="flex items-center">
-                        {getDocumentIcon(doc.type)}
-                        <span className="ml-2 font-medium text-sm truncate max-w-[150px] sm:max-w-xs">
-                          {doc.name}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="p-3 text-sm text-gray-600 hidden sm:table-cell">
-                      {new Date(doc.date).toLocaleDateString()}
-                    </td>
-                    <td className="p-3 text-sm text-gray-600 hidden md:table-cell">{doc.size}</td>
-                    <td className="p-3">
-                      <Badge
-                        variant="outline"
-                        className={`${
-                          doc.verified
-                            ? "border-green-500 text-green-700 bg-green-50"
-                            : "border-amber-500 text-amber-700 bg-amber-50"
-                        }`}
-                      >
-                        {doc.verified ? "Verified" : "Pending"}
-                      </Badge>
-                    </td>
-                    <td className="p-3">
-                      <Button variant="ghost" size="sm" className="text-legal-primary hover:text-legal-dark hover:bg-legal-light">
-                        View
-                      </Button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={5} className="p-6 text-center text-muted-foreground">
-                    No documents found matching your search criteria.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        {isLoading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map((index) => (
+              <div key={index} className="flex items-center space-x-4 p-4">
+                <Skeleton className="h-12 w-12 rounded-md" />
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-[250px]" />
+                  <Skeleton className="h-4 w-[200px]" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : error ? (
+          <div className="p-6 text-center text-red-500">
+            Error loading documents. Please try again later.
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="w-[40%]">Name</TableHead>
+                  <TableHead className="hidden sm:table-cell">Date</TableHead>
+                  <TableHead className="hidden md:table-cell">Size</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredDocuments.length > 0 ? (
+                  filteredDocuments.map((doc) => (
+                    <TableRow key={doc.id}>
+                      <TableCell>
+                        <div className="flex items-center">
+                          {getDocumentIcon(doc.type)}
+                          <span className="ml-2 font-medium text-sm truncate max-w-[150px] sm:max-w-xs">
+                            {doc.name}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell text-sm text-gray-600">
+                        {new Date(doc.date).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-sm text-gray-600">
+                        {doc.size}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={`${
+                            doc.verified
+                              ? "border-green-500 text-green-700 bg-green-50"
+                              : "border-amber-500 text-amber-700 bg-amber-50"
+                          }`}
+                        >
+                          {doc.verified ? "Verified" : "Pending"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-legal-primary hover:text-legal-dark hover:bg-legal-light"
+                          >
+                            View
+                          </Button>
+                          {!doc.verified && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="border-legal-primary text-legal-primary hover:bg-legal-light"
+                              onClick={() => handleVerify(doc.id)}
+                              disabled={verifyMutation.isPending}
+                            >
+                              Verify
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} className="p-6 text-center text-muted-foreground">
+                      No documents found matching your search criteria.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

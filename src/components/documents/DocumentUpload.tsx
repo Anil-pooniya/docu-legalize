@@ -5,12 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { UploadIcon, FileIcon, XIcon } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { useUploadDocument } from "@/services/documentService";
 
 const DocumentUpload: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const { toast } = useToast();
+  const uploadMutation = useUploadDocument();
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -70,19 +71,12 @@ const DocumentUpload: React.FC = () => {
   const handleUpload = async () => {
     if (!file) return;
     
-    setUploading(true);
-    
-    // Normally here we would upload the file to a server
-    // Simulating upload with a delay
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    
-    toast({
-      title: "Document uploaded",
-      description: `"${file.name}" has been successfully uploaded and is being processed.`,
-    });
-    
-    setFile(null);
-    setUploading(false);
+    try {
+      await uploadMutation.mutateAsync(file);
+      setFile(null);
+    } catch (error) {
+      // Error is handled by the mutation
+    }
   };
 
   const removeFile = () => {
@@ -145,10 +139,10 @@ const DocumentUpload: React.FC = () => {
         <div className="mt-6 flex justify-end">
           <Button
             className="bg-legal-primary hover:bg-legal-dark"
-            disabled={!file || uploading}
+            disabled={!file || uploadMutation.isPending}
             onClick={handleUpload}
           >
-            {uploading ? "Processing..." : "Upload Document"}
+            {uploadMutation.isPending ? "Processing..." : "Upload Document"}
           </Button>
         </div>
       </CardContent>
