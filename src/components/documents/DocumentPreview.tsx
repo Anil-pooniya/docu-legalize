@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,7 +14,7 @@ interface DocumentPreviewProps {
 }
 
 const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) => {
-  const { data: document, isLoading, error } = useDocument(documentId);
+  const { data: documentData, isLoading, error } = useDocument(documentId);
   const certificateMutation = useGenerateCertificate();
   const [activeTab, setActiveTab] = useState("preview");
   const [extractedText, setExtractedText] = useState<string | null>(null);
@@ -37,26 +36,26 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
     setExtractedText(null);
     
     // If document has content already, use it
-    if (document?.content) {
-      setExtractedText(document.content);
+    if (documentData?.content) {
+      setExtractedText(documentData.content);
     }
-  }, [document]);
+  }, [documentData]);
 
   const handleGenerateCertificate = () => {
-    if (!document) return;
+    if (!documentData) return;
     
-    certificateMutation.mutate(document.id);
+    certificateMutation.mutate(documentData.id);
   };
 
   const handleExtractText = async () => {
-    if (!document) return;
+    if (!documentData) return;
     
     setIsExtracting(true);
     try {
       // In a real app, we would need to fetch the actual file
       // For now, we'll simulate with a mock file
-      const mockFile = new File([""], document.name, { 
-        type: document.type === "pdf" ? "application/pdf" : "image/jpeg" 
+      const mockFile = new File([""], documentData.name, { 
+        type: documentData.type === "pdf" ? "application/pdf" : "image/jpeg" 
       });
       
       const result = await ocrService.extractText(mockFile);
@@ -91,21 +90,21 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
   const handleDownload = () => {
     // In a real app, we would fetch the document file
     // For now, we'll create a mock text file for download
-    const element = document.createElement("a");
+    const element = window.document.createElement("a");
     
     let fileContent = "";
     if (activeTab === "textContent" && extractedText) {
       fileContent = extractedText;
     } else {
-      fileContent = document?.content || `Mock content for ${document?.name}`;
+      fileContent = documentData?.content || `Mock content for ${documentData?.name}`;
     }
     
     const file = new Blob([fileContent], { type: 'text/plain' });
     element.href = URL.createObjectURL(file);
-    element.download = document?.name || "document.txt";
-    document.body.appendChild(element);
+    element.download = documentData?.name || "document.txt";
+    window.document.body.appendChild(element);
     element.click();
-    document.body.removeChild(element);
+    window.document.body.removeChild(element);
     
     toast({
       title: "Download started",
@@ -131,7 +130,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
     );
   }
 
-  if (error || !document) {
+  if (error || !documentData) {
     return (
       <Card className="w-full">
         <CardHeader>
@@ -152,11 +151,11 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
           <div>
-            <CardTitle className="text-xl text-legal-primary mb-1">{document.name}</CardTitle>
+            <CardTitle className="text-xl text-legal-primary mb-1">{documentData.name}</CardTitle>
             <CardDescription>
-              Uploaded on {new Date(document.date).toLocaleDateString()} • {document.size}
+              Uploaded on {new Date(documentData.date).toLocaleDateString()} • {documentData.size}
               <span className="ml-2">
-                {document.verified && (
+                {documentData.verified && (
                   <Badge className="bg-green-100 text-green-800 border-green-300 font-medium">
                     <CheckCircleIcon className="h-3.5 w-3.5 mr-1" />
                     Verified
@@ -166,7 +165,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
             </CardDescription>
           </div>
           <div className="flex space-x-2">
-            {document.verified && (
+            {documentData.verified && (
               <Button 
                 variant="outline" 
                 size="sm"
@@ -198,7 +197,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
           
           <TabsContent value="preview" className="mt-0">
             <div className="document-preview border rounded-md overflow-hidden flex items-center justify-center p-6 h-96">
-              {document.type === "pdf" ? (
+              {documentData.type === "pdf" ? (
                 <div className="text-center">
                   <FileText className="h-16 w-16 mx-auto text-red-500 opacity-50 mb-4" />
                   <p className="text-gray-500 text-sm">PDF document preview.</p>
@@ -211,7 +210,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
                     {isExtracting ? "Extracting..." : "Extract Document Text"}
                   </Button>
                 </div>
-              ) : document.type === "image" ? (
+              ) : documentData.type === "image" ? (
                 <div className="text-center">
                   <div className="bg-gray-100 p-4 rounded-md mb-4">
                     <FileText className="h-16 w-16 mx-auto text-blue-500 opacity-50 mb-4" />
@@ -255,19 +254,19 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
               <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
                 <div>
                   <dt className="text-sm font-medium text-gray-500">File Name</dt>
-                  <dd className="mt-1 text-sm text-gray-900">{document.name}</dd>
+                  <dd className="mt-1 text-sm text-gray-900">{documentData.name}</dd>
                 </div>
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Upload Date</dt>
-                  <dd className="mt-1 text-sm text-gray-900">{new Date(document.date).toLocaleDateString()}</dd>
+                  <dd className="mt-1 text-sm text-gray-900">{new Date(documentData.date).toLocaleDateString()}</dd>
                 </div>
                 <div>
                   <dt className="text-sm font-medium text-gray-500">File Size</dt>
-                  <dd className="mt-1 text-sm text-gray-900">{document.size}</dd>
+                  <dd className="mt-1 text-sm text-gray-900">{documentData.size}</dd>
                 </div>
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Document Type</dt>
-                  <dd className="mt-1 text-sm text-gray-900">{document.type === 'pdf' ? 'PDF Document' : 'Image'}</dd>
+                  <dd className="mt-1 text-sm text-gray-900">{documentData.type === 'pdf' ? 'PDF Document' : 'Image'}</dd>
                 </div>
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Created By</dt>
@@ -275,7 +274,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
                 </div>
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Modified Date</dt>
-                  <dd className="mt-1 text-sm text-gray-900">{new Date(document.date).toLocaleDateString()}</dd>
+                  <dd className="mt-1 text-sm text-gray-900">{new Date(documentData.date).toLocaleDateString()}</dd>
                 </div>
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Pages</dt>
@@ -284,7 +283,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Legal Status</dt>
                   <dd className="mt-1 text-sm text-gray-900">
-                    {document.verified ? (
+                    {documentData.verified ? (
                       <span className="text-green-600 font-medium">Section 65B Verified</span>
                     ) : (
                       <span className="text-amber-600 font-medium">Pending Verification</span>
@@ -301,9 +300,9 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
                 <pre className="text-sm whitespace-pre-wrap font-sans">
                   {extractedText}
                 </pre>
-              ) : document.content ? (
+              ) : documentData.content ? (
                 <pre className="text-sm whitespace-pre-wrap font-sans">
-                  {document.content}
+                  {documentData.content}
                 </pre>
               ) : (
                 <div className="text-center py-8">
