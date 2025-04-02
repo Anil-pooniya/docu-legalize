@@ -15,6 +15,7 @@ import { format } from "date-fns";
 const Certificates = () => {
   const [showCertificateDialog, setShowCertificateDialog] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("history");
   const [viewCertificateDetails, setViewCertificateDetails] = useState<{
     id: string;
     document: string;
@@ -39,6 +40,7 @@ const Certificates = () => {
       date: certificate.date,
       verificationId: certificate.verificationId
     });
+    setActiveTab("preview"); // Switch to the preview tab when viewing a certificate
   };
 
   return (
@@ -81,7 +83,7 @@ const Certificates = () => {
           </Card>
 
           <div className="lg:col-span-3">
-            <Tabs defaultValue={viewCertificateDetails ? "preview" : "history"}>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="mb-4">
                 <TabsTrigger value="preview">Certificate Preview</TabsTrigger>
                 <TabsTrigger value="history">Certificate History</TabsTrigger>
@@ -89,11 +91,13 @@ const Certificates = () => {
               
               <TabsContent value="preview" className="mt-0">
                 {viewCertificateDetails ? (
-                  <Section65BCertificate 
-                    documentName={viewCertificateDetails.document} 
-                    generatedDate={new Date(viewCertificateDetails.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-                    verificationId={viewCertificateDetails.verificationId}
-                  />
+                  <div className="border rounded-lg p-4 bg-white">
+                    <Section65BCertificate 
+                      documentName={viewCertificateDetails.document} 
+                      generatedDate={new Date(viewCertificateDetails.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                      verificationId={viewCertificateDetails.verificationId}
+                    />
+                  </div>
                 ) : (
                   <Card className="p-6 text-center">
                     <div className="flex flex-col items-center justify-center py-10">
