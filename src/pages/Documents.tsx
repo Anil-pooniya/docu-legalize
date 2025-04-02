@@ -10,7 +10,7 @@ import { useDocuments } from "@/services/documentService";
 
 const Documents = () => {
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
-  const { data: documents } = useDocuments();
+  const { data: documents, isLoading } = useDocuments();
 
   // Select the first document by default if none is selected and documents are loaded
   useEffect(() => {

@@ -145,6 +145,18 @@ This extracted text can be used for further analysis, indexing, and verification
         resolve(file);
       }, 1500);
     });
+  },
+  
+  // New method to save extracted text to a document
+  saveExtractedText: async (documentId: string, text: string): Promise<void> => {
+    // In a real app: return api.post(`/documents/${documentId}/content`, { text });
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        // Update the document content in our mock data
+        // This would be handled by the documentService in a real app
+        resolve();
+      }, 800);
+    });
   }
 };
 

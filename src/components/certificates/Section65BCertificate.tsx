@@ -1,8 +1,8 @@
 
-import React from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileTextIcon, DownloadIcon, PrinterIcon, CheckCircleIcon, ClipboardIcon } from "lucide-react";
+import { FileTextIcon, DownloadIcon, PrinterIcon, CheckCircleIcon, ClipboardIcon, Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
 interface Section65BCertificateProps {
@@ -17,6 +17,8 @@ const Section65BCertificate: React.FC<Section65BCertificateProps> = ({
   verificationId = "DL-" + Math.random().toString(36).substring(2, 10).toUpperCase()
 }) => {
   const { toast } = useToast();
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
   
   const handleCopyToClipboard = () => {
     navigator.clipboard.writeText(verificationId).then(
@@ -37,14 +39,20 @@ const Section65BCertificate: React.FC<Section65BCertificateProps> = ({
   };
   
   const handlePrint = () => {
-    window.print();
-    toast({
-      title: "Print dialog opened",
-      description: "Certificate sent to printer.",
-    });
+    setIsPrinting(true);
+    setTimeout(() => {
+      window.print();
+      setIsPrinting(false);
+      toast({
+        title: "Print dialog opened",
+        description: "Certificate sent to printer.",
+      });
+    }, 300); // Short delay to allow state update
   };
   
   const handleDownload = () => {
+    setIsDownloading(true);
+    
     // Create certificate content
     const certificateContent = `
 CERTIFICATE UNDER SECTION 65B
@@ -80,6 +88,7 @@ This certificate is issued in accordance with Section 65B of the Indian Evidence
     element.click();
     document.body.removeChild(element);
     
+    setIsDownloading(false);
     toast({
       title: "Certificate downloaded",
       description: "Your Section 65B certificate has been downloaded successfully.",
@@ -97,13 +106,31 @@ This certificate is issued in accordance with Section 65B of the Indian Evidence
             </CardDescription>
           </div>
           <div className="flex space-x-2">
-            <Button variant="outline" size="sm" onClick={handlePrint}>
-              <PrinterIcon className="h-4 w-4 mr-1.5" />
-              <span className="hidden sm:inline">Print</span>
+            <Button variant="outline" size="sm" onClick={handlePrint} disabled={isPrinting}>
+              {isPrinting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  <span className="hidden sm:inline">Printing...</span>
+                </>
+              ) : (
+                <>
+                  <PrinterIcon className="h-4 w-4 mr-1.5" />
+                  <span className="hidden sm:inline">Print</span>
+                </>
+              )}
             </Button>
-            <Button variant="outline" size="sm" onClick={handleDownload}>
-              <DownloadIcon className="h-4 w-4 mr-1.5" />
-              <span className="hidden sm:inline">Download</span>
+            <Button variant="outline" size="sm" onClick={handleDownload} disabled={isDownloading}>
+              {isDownloading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  <span className="hidden sm:inline">Downloading...</span>
+                </>
+              ) : (
+                <>
+                  <DownloadIcon className="h-4 w-4 mr-1.5" />
+                  <span className="hidden sm:inline">Download</span>
+                </>
+              )}
             </Button>
           </div>
         </div>
@@ -115,7 +142,7 @@ This certificate is issued in accordance with Section 65B of the Indian Evidence
             <h3 className="text-sm text-gray-600">Indian Evidence Act, 1872</h3>
           </div>
 
-          <div className="certificate-badge text-white rounded-md p-3 flex items-center justify-between mb-6">
+          <div className="certificate-badge bg-legal-primary text-white rounded-md p-3 flex items-center justify-between mb-6">
             <div className="flex items-center">
               <CheckCircleIcon className="h-5 w-5 mr-2" />
               <span className="font-medium">Legally Verified Document</span>
@@ -169,8 +196,8 @@ This certificate is issued in accordance with Section 65B of the Indian Evidence
 
             <div className="mt-8">
               <p className="font-medium mb-1">Signature:</p>
-              <div className="h-16 mt-2 certificate-stamp rounded-md flex items-center justify-center">
-                <p className="text-legal-primary font-medium animate-pulse-light">Digital Signature Applied</p>
+              <div className="h-16 mt-2 border-2 border-dashed border-legal-primary rounded-md flex items-center justify-center">
+                <p className="text-legal-primary font-medium animate-pulse">Digital Signature Applied</p>
               </div>
             </div>
 
