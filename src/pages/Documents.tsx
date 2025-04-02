@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { PlusIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useDocuments } from "@/services/documentService";
+import { Toaster } from "@/components/ui/toaster";
 
 const Documents = () => {
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
@@ -16,6 +17,8 @@ const Documents = () => {
   useEffect(() => {
     if (!selectedDocumentId && documents && documents.length > 0) {
       setSelectedDocumentId(documents[0].id);
+    } else if (documents && documents.length === 0) {
+      setSelectedDocumentId(null); // Clear selection if there are no documents
     }
   }, [documents, selectedDocumentId]);
 
@@ -40,10 +43,27 @@ const Documents = () => {
             />
           </div>
           <div className="lg:col-span-3">
-            <DocumentPreview documentId={selectedDocumentId || undefined} />
+            {selectedDocumentId ? (
+              <DocumentPreview documentId={selectedDocumentId} />
+            ) : (
+              <div className="bg-white border rounded-lg p-8 text-center h-full flex flex-col items-center justify-center">
+                <div className="text-legal-primary text-4xl mb-4">📄</div>
+                <h3 className="text-xl font-semibold mb-2">No Documents</h3>
+                <p className="text-gray-500 mb-6">
+                  Upload your first document to get started
+                </p>
+                <Link to="/#upload-section">
+                  <Button className="bg-legal-primary hover:bg-legal-dark">
+                    <PlusIcon className="h-4 w-4 mr-2" />
+                    Upload New Document
+                  </Button>
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       </div>
+      <Toaster />
     </PageLayout>
   );
 };

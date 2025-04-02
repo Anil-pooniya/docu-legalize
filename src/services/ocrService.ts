@@ -147,13 +147,26 @@ This extracted text can be used for further analysis, indexing, and verification
     });
   },
   
-  // New method to save extracted text to a document
+  // Save extracted text to a document
   saveExtractedText: async (documentId: string, text: string): Promise<void> => {
     // In a real app: return api.post(`/documents/${documentId}/content`, { text });
+    
+    // Get the mock documents from localStorage
+    const storedDocs = localStorage.getItem('documents');
+    let docs = storedDocs ? JSON.parse(storedDocs) : [];
+    
     return new Promise((resolve) => {
       setTimeout(() => {
-        // Update the document content in our mock data
-        // This would be handled by the documentService in a real app
+        // Find the document to update
+        const docIndex = docs.findIndex((doc: any) => doc.id === documentId);
+        
+        // If the document exists, update its content
+        if (docIndex !== -1) {
+          docs[docIndex].content = text;
+          // Save back to localStorage
+          localStorage.setItem('documents', JSON.stringify(docs));
+        }
+        
         resolve();
       }, 800);
     });

@@ -53,8 +53,54 @@ const Section65BCertificate: React.FC<Section65BCertificateProps> = ({
   const handleDownload = () => {
     setIsDownloading(true);
     
-    // Create certificate content
-    const certificateContent = `
+    try {
+      // Create certificate content
+      const certificateContent = generateCertificateText();
+      
+      // Create PDF-like content for better formatting
+      const formattedContent = certificateContent
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line)
+        .join('\n\n');
+      
+      // Create and trigger download as text file
+      const element = document.createElement("a");
+      const file = new Blob([formattedContent], { type: 'text/plain' });
+      element.href = URL.createObjectURL(file);
+      element.download = `Section65B_Certificate_${verificationId}.txt`;
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
+      
+      // Also download as HTML for better formatting
+      const htmlContent = generateCertificateHTML();
+      const htmlBlob = new Blob([htmlContent], { type: 'text/html' });
+      const htmlElement = document.createElement("a");
+      htmlElement.href = URL.createObjectURL(htmlBlob);
+      htmlElement.download = `Section65B_Certificate_${verificationId}.html`;
+      document.body.appendChild(htmlElement);
+      htmlElement.click();
+      document.body.removeChild(htmlElement);
+      
+      toast({
+        title: "Certificate downloaded",
+        description: "Your Section 65B certificate has been downloaded successfully in text and HTML formats.",
+      });
+    } catch (error) {
+      toast({
+        title: "Download failed",
+        description: "There was an error downloading the certificate.",
+        variant: "destructive",
+      });
+      console.error("Certificate download error:", error);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const generateCertificateText = () => {
+    return `
 CERTIFICATE UNDER SECTION 65B
 Indian Evidence Act, 1872
 
@@ -78,21 +124,133 @@ Place: _______________________
 
 This certificate is issued in accordance with Section 65B of the Indian Evidence Act, 1872, and serves as legal attestation for the admissibility of the electronic document as evidence in legal proceedings.
     `;
+  };
+  
+  const generateCertificateHTML = () => {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Section 65B Certificate - ${verificationId}</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .header h1 {
+      margin-bottom: 5px;
+      color: #1f2937;
+    }
+    .header h3 {
+      margin-top: 0;
+      color: #6b7280;
+      font-weight: normal;
+    }
+    .verification-badge {
+      background-color: #1a4d8c;
+      color: white;
+      padding: 15px;
+      border-radius: 5px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .content {
+      margin-bottom: 30px;
+    }
+    .content ol {
+      padding-left: 20px;
+    }
+    .content li {
+      margin-bottom: 10px;
+    }
+    .footer {
+      margin-top: 40px;
+      text-align: center;
+      font-size: 12px;
+      color: #6b7280;
+      font-style: italic;
+    }
+    .signature {
+      margin-top: 40px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .signature-field {
+      border-top: 1px solid #000;
+      width: 200px;
+      text-align: center;
+      padding-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>CERTIFICATE UNDER SECTION 65B</h1>
+    <h3>Indian Evidence Act, 1872</h3>
+  </div>
+  
+  <div class="verification-badge">
+    <div>Legally Verified Document</div>
+    <div>Verification ID: ${verificationId}</div>
+  </div>
+  
+  <div class="content">
+    <p>
+      Document: <strong>${documentName}</strong><br>
+      Date of Generation: <strong>${generatedDate}</strong>
+    </p>
     
-    // Create and trigger download
-    const element = document.createElement("a");
-    const file = new Blob([certificateContent], { type: 'text/plain' });
-    element.href = URL.createObjectURL(file);
-    element.download = `Section65B_Certificate_${verificationId}.txt`;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
+    <p>
+      I, _____________________, do hereby certify that:
+    </p>
     
-    setIsDownloading(false);
-    toast({
-      title: "Certificate downloaded",
-      description: "Your Section 65B certificate has been downloaded successfully.",
-    });
+    <ol>
+      <li>
+        I am legally authorized to provide this certificate under Section 65B of the Indian Evidence Act, 1872.
+      </li>
+      <li>
+        The electronic document titled "${documentName}" was produced from a computer system which:
+        <ul>
+          <li>Was regularly used to store or process information for the activities regularly carried out by the user of the computer.</li>
+          <li>Was operating properly during the relevant period; or if not, any respects in which it was not operating properly did not affect the production of the document or the accuracy of its contents.</li>
+        </ul>
+      </li>
+      <li>
+        The information contained in this electronic document accurately reproduces information contained in the electronic records used to generate it.
+      </li>
+      <li>
+        This document is generated by a computer output and is true and correct to the best of my knowledge and belief.
+      </li>
+    </ol>
+  </div>
+  
+  <div class="signature">
+    <div>
+      <div class="signature-field">Date: ${generatedDate}</div>
+    </div>
+    <div>
+      <div class="signature-field">Signature</div>
+    </div>
+    <div>
+      <div class="signature-field">Place: ________________</div>
+    </div>
+  </div>
+  
+  <div class="footer">
+    This certificate is issued in accordance with Section 65B of the Indian Evidence Act, 1872, and serves as legal attestation for the admissibility of the electronic document as evidence in legal proceedings.
+  </div>
+</body>
+</html>
+    `;
   };
 
   return (
@@ -119,7 +277,13 @@ This certificate is issued in accordance with Section 65B of the Indian Evidence
                 </>
               )}
             </Button>
-            <Button variant="outline" size="sm" onClick={handleDownload} disabled={isDownloading}>
+            <Button 
+              variant="default" 
+              size="sm" 
+              onClick={handleDownload} 
+              disabled={isDownloading}
+              className="bg-legal-primary hover:bg-legal-dark"
+            >
               {isDownloading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
@@ -128,7 +292,7 @@ This certificate is issued in accordance with Section 65B of the Indian Evidence
               ) : (
                 <>
                   <DownloadIcon className="h-4 w-4 mr-1.5" />
-                  <span className="hidden sm:inline">Download</span>
+                  <span className="hidden sm:inline">Download Certificate</span>
                 </>
               )}
             </Button>
