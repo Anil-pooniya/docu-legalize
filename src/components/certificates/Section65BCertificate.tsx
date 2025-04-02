@@ -1,9 +1,21 @@
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileTextIcon, DownloadIcon, PrinterIcon, CheckCircleIcon, ClipboardIcon, Loader2 } from "lucide-react";
+import { 
+  FileTextIcon, 
+  DownloadIcon, 
+  PrinterIcon, 
+  CheckCircleIcon, 
+  ClipboardIcon, 
+  Loader2,
+  FileIcon,
+  Share2Icon,
+  Eye
+} from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
 interface Section65BCertificateProps {
   documentName?: string;
@@ -19,6 +31,8 @@ const Section65BCertificate: React.FC<Section65BCertificateProps> = ({
   const { toast } = useToast();
   const [isDownloading, setIsDownloading] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [isDownloadingPDF, setIsDownloadingPDF] = useState(false);
+  const certificateRef = useRef<HTMLDivElement>(null);
   
   const handleCopyToClipboard = () => {
     navigator.clipboard.writeText(verificationId).then(
@@ -96,6 +110,50 @@ const Section65BCertificate: React.FC<Section65BCertificateProps> = ({
       console.error("Certificate download error:", error);
     } finally {
       setIsDownloading(false);
+    }
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!certificateRef.current) return;
+    
+    setIsDownloadingPDF(true);
+    try {
+      // Create a canvas from the certificate element
+      const canvas = await html2canvas(certificateRef.current, {
+        scale: 2, // Higher scale for better quality
+        logging: false,
+        useCORS: true,
+        backgroundColor: "#ffffff"
+      });
+      
+      // Create PDF
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      // Calculate dimensions to fit the image properly on the PDF
+      const imgWidth = 210; // A4 width in mm (portrait)
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      pdf.save(`Section65B_Certificate_${verificationId}.pdf`);
+      
+      toast({
+        title: "PDF downloaded",
+        description: "Your Section 65B certificate has been downloaded as PDF.",
+      });
+    } catch (error) {
+      console.error("PDF generation error:", error);
+      toast({
+        title: "PDF download failed",
+        description: "There was an error creating the PDF certificate.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloadingPDF(false);
     }
   };
 
@@ -280,19 +338,19 @@ This certificate is issued in accordance with Section 65B of the Indian Evidence
             <Button 
               variant="default" 
               size="sm" 
-              onClick={handleDownload} 
-              disabled={isDownloading}
+              onClick={handleDownloadPDF} 
+              disabled={isDownloadingPDF}
               className="bg-legal-primary hover:bg-legal-dark"
             >
-              {isDownloading ? (
+              {isDownloadingPDF ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                  <span className="hidden sm:inline">Downloading...</span>
+                  <span className="hidden sm:inline">Processing...</span>
                 </>
               ) : (
                 <>
                   <DownloadIcon className="h-4 w-4 mr-1.5" />
-                  <span className="hidden sm:inline">Download Certificate</span>
+                  <span className="hidden sm:inline">Download PDF</span>
                 </>
               )}
             </Button>
@@ -300,41 +358,56 @@ This certificate is issued in accordance with Section 65B of the Indian Evidence
         </div>
       </CardHeader>
       <CardContent>
-        <div className="border rounded-lg p-6 bg-white">
+        <div ref={certificateRef} className="border rounded-lg p-6 bg-white print:shadow-none">
           <div className="text-center mb-6">
-            <h2 className="text-lg font-bold uppercase text-legal-dark">Certificate under Section 65B</h2>
-            <h3 className="text-sm text-gray-600">Indian Evidence Act, 1872</h3>
+            <div className="flex justify-center items-center mb-2">
+              <div className="bg-legal-primary h-16 w-16 rounded-full flex items-center justify-center text-white">
+                <CheckCircleIcon className="h-8 w-8" />
+              </div>
+            </div>
+            <h2 className="text-2xl font-bold uppercase text-legal-dark mb-1">Certificate under Section 65B</h2>
+            <h3 className="text-md text-gray-600">Indian Evidence Act, 1872</h3>
           </div>
 
-          <div className="certificate-badge bg-legal-primary text-white rounded-md p-3 flex items-center justify-between mb-6">
+          <div className="certificate-badge bg-gradient-to-r from-legal-primary to-legal-dark text-white rounded-md p-4 flex items-center justify-between mb-6 shadow-sm">
             <div className="flex items-center">
               <CheckCircleIcon className="h-5 w-5 mr-2" />
               <span className="font-medium">Legally Verified Document</span>
             </div>
             <div className="flex items-center">
               <span className="text-sm mr-2">Verification ID:</span>
-              <code className="bg-white bg-opacity-20 px-2 py-1 rounded text-sm">{verificationId}</code>
+              <code className="bg-white bg-opacity-20 px-2 py-1 rounded text-sm font-mono">{verificationId}</code>
               <button 
                 onClick={handleCopyToClipboard}
                 className="ml-1 p-1 hover:bg-white hover:bg-opacity-10 rounded"
+                aria-label="Copy verification ID"
               >
                 <ClipboardIcon className="h-4 w-4" />
               </button>
             </div>
           </div>
 
-          <div className="space-y-4 text-sm">
-            <p>
+          <div className="space-y-6 text-sm">
+            <div className="flex justify-between items-center pb-2 border-b">
+              <div>
+                <strong className="text-legal-primary">Document:</strong> {documentName}
+              </div>
+              <div>
+                <strong className="text-legal-primary">Date:</strong> {generatedDate}
+              </div>
+            </div>
+
+            <p className="text-base">
               I, <span className="font-medium">___________________</span>, do hereby certify that:
             </p>
 
-            <ol className="list-decimal pl-5 space-y-2">
+            <ol className="list-decimal pl-5 space-y-4">
               <li>
                 I am legally authorized to provide this certificate under Section 65B of the Indian Evidence Act, 1872.
               </li>
               <li>
                 The electronic document titled "<span className="font-medium">{documentName}</span>" was produced from a computer system which:
-                <ul className="list-disc pl-5 mt-1 space-y-1">
+                <ul className="list-disc pl-5 mt-2 space-y-2">
                   <li>Was regularly used to store or process information for the activities regularly carried out by the user of the computer.</li>
                   <li>Was operating properly during the relevant period; or if not, any respects in which it was not operating properly did not affect the production of the document or the accuracy of its contents.</li>
                 </ul>
@@ -347,28 +420,91 @@ This certificate is issued in accordance with Section 65B of the Indian Evidence
               </li>
             </ol>
 
-            <div className="mt-8 grid grid-cols-2 gap-8">
-              <div>
-                <p className="font-medium mb-1">Date of Generation:</p>
+            <div className="mt-10 grid grid-cols-2 gap-8">
+              <div className="border-t pt-2">
+                <p className="font-medium mb-1">Date:</p>
                 <p>{generatedDate}</p>
               </div>
-              <div>
+              <div className="border-t pt-2">
                 <p className="font-medium mb-1">Place:</p>
                 <p>_______________________</p>
               </div>
             </div>
 
             <div className="mt-8">
-              <p className="font-medium mb-1">Signature:</p>
-              <div className="h-16 mt-2 border-2 border-dashed border-legal-primary rounded-md flex items-center justify-center">
-                <p className="text-legal-primary font-medium animate-pulse">Digital Signature Applied</p>
+              <p className="font-medium mb-2">Signature:</p>
+              <div className="h-16 mt-2 border-2 border-dashed border-legal-primary rounded-md flex items-center justify-center mb-4">
+                <p className="text-legal-primary font-medium">Digital Signature Applied</p>
               </div>
             </div>
 
             <div className="mt-8 text-xs text-gray-500 italic text-center">
               This certificate is issued in accordance with Section 65B of the Indian Evidence Act, 1872, and serves as legal attestation for the admissibility of the electronic document as evidence in legal proceedings.
             </div>
+            
+            <div className="flex justify-center mt-6">
+              <div className="flex items-center border border-legal-primary rounded-full px-4 py-1 text-xs text-legal-primary">
+                <CheckCircleIcon className="h-3 w-3 mr-1" />
+                Digitally signed and secure
+              </div>
+            </div>
           </div>
+        </div>
+        
+        <div className="mt-6 flex flex-wrap gap-2 justify-center">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleDownload}
+            disabled={isDownloading}
+            className="gap-1.5"
+          >
+            {isDownloading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileTextIcon className="h-4 w-4" />
+            )}
+            Download as Text/HTML
+          </Button>
+          <Button 
+            variant="outline"
+            size="sm" 
+            onClick={handlePrint}
+            disabled={isPrinting}
+            className="gap-1.5"
+          >
+            {isPrinting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <PrinterIcon className="h-4 w-4" />
+            )}
+            Print Certificate
+          </Button>
+          <Button 
+            variant="default"
+            size="sm"
+            onClick={handleDownloadPDF} 
+            disabled={isDownloadingPDF}
+            className="bg-legal-primary hover:bg-legal-dark gap-1.5"
+          >
+            {isDownloadingPDF ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <DownloadIcon className="h-4 w-4" />
+            )}
+            Download as PDF
+          </Button>
+          <Button 
+            variant="secondary"
+            size="sm"
+            className="gap-1.5"
+            asChild
+          >
+            <a href={`mailto:?subject=Section%2065B%20Certificate&body=Your%20Section%2065B%20certificate%20with%20verification%20ID%20${verificationId}%20is%20attached.%0A%0ARegards%2C%0ADocuLegalize%20Team`}>
+              <Share2Icon className="h-4 w-4" />
+              Share Certificate
+            </a>
+          </Button>
         </div>
       </CardContent>
     </Card>
