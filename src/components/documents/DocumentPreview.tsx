@@ -44,9 +44,9 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
   const [isExtracting, setIsExtracting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [formatType, setFormatType] = useState<'plain' | 'structured'>('plain');
-  const [ocrMetadata, setOcrMetadata<OCRMetadata | null>(null);
-  const [structuredContent, setStructuredContent<StructuredContent | null>(null);
-  const [certificateData, setCertificateData<{
+  const [ocrMetadata, setOcrMetadata] = useState<OCRMetadata | null>(null);
+  const [structuredContent, setStructuredContent] = useState<StructuredContent | null>(null);
+  const [certificateData, setCertificateData] = useState<{
     id: string;
     documentName: string;
     date: string;
