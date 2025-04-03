@@ -5,7 +5,7 @@ import Section65BCertificate from "@/components/certificates/Section65BCertifica
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusIcon, FileTextIcon, ArrowRightIcon, FileIcon, CheckCircleIcon, ClockIcon, AlertCircleIcon, EyeIcon } from "lucide-react";
+import { PlusIcon, FileTextIcon, ArrowRightIcon, FileIcon, CheckCircleIcon, ClockIcon, AlertCircleIcon, EyeIcon, Download } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,11 @@ const Certificates = () => {
     document: string;
     date: string;
     verificationId: string;
+    certifierName?: string;
+    certifierDesignation?: string;
+    certifierOrganization?: string;
+    sha256Hash?: string;
+    verificationLink?: string;
   } | null>(null);
   const { toast } = useToast();
   
@@ -33,14 +38,41 @@ const Certificates = () => {
     document: string;
     date: string;
     verificationId: string;
+    certifierName?: string;
+    certifierDesignation?: string;
+    certifierOrganization?: string;
+    sha256Hash?: string;
+    verificationLink?: string;
   }) => {
     setViewCertificateDetails({
       id: String(certificate.id),
       document: certificate.document,
       date: certificate.date,
-      verificationId: certificate.verificationId
+      verificationId: certificate.verificationId,
+      certifierName: certificate.certifierName || 'Legal Administrator',
+      certifierDesignation: certificate.certifierDesignation || 'Legal Officer',
+      certifierOrganization: certificate.certifierOrganization || 'DocuLegalize Platform',
+      sha256Hash: certificate.sha256Hash || generateMockSHA256(),
+      verificationLink: certificate.verificationLink || `https://doculegalize.com/verify/${certificate.verificationId}`
     });
     setActiveTab("preview"); // Switch to the preview tab when viewing a certificate
+  };
+
+  // Helper function to generate a mock SHA256 hash
+  const generateMockSHA256 = () => {
+    const characters = '0123456789abcdef';
+    let result = '';
+    for (let i = 0; i < 64; i++) {
+      result += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+    return result;
+  };
+
+  const handleCertificateDownload = () => {
+    toast({
+      title: "Certificate downloaded",
+      description: "Your certificate has been successfully downloaded.",
+    });
   };
 
   return (
@@ -91,13 +123,19 @@ const Certificates = () => {
               
               <TabsContent value="preview" className="mt-0">
                 {viewCertificateDetails ? (
-                  <div className="border rounded-lg p-4 bg-white">
+                  <Card className="p-4">
                     <Section65BCertificate 
                       documentName={viewCertificateDetails.document} 
                       generatedDate={new Date(viewCertificateDetails.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
                       verificationId={viewCertificateDetails.verificationId}
+                      certifierName={viewCertificateDetails.certifierName}
+                      certifierDesignation={viewCertificateDetails.certifierDesignation}
+                      certifierOrganization={viewCertificateDetails.certifierOrganization}
+                      sha256Hash={viewCertificateDetails.sha256Hash}
+                      verificationLink={viewCertificateDetails.verificationLink}
+                      onDownload={handleCertificateDownload}
                     />
-                  </div>
+                  </Card>
                 ) : (
                   <Card className="p-6 text-center">
                     <div className="flex flex-col items-center justify-center py-10">
@@ -141,14 +179,24 @@ const Certificates = () => {
                               document: "Contract Agreement - ABC Corp.pdf",
                               date: "Nov 15, 2023",
                               verificationId: "DL-X7Y9Z2A1",
-                              status: "valid"
+                              status: "valid",
+                              certifierName: "John Smith",
+                              certifierDesignation: "Legal Counsel",
+                              certifierOrganization: "ABC Law Associates",
+                              sha256Hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                              verificationLink: "https://doculegalize.com/verify/DL-X7Y9Z2A1"
                             },
                             {
                               id: 2,
                               document: "Property Deed - 123 Main St.jpg",
                               date: "Nov 12, 2023",
                               verificationId: "DL-B3C5D2E8",
-                              status: "valid"
+                              status: "valid",
+                              certifierName: "Sarah Johnson",
+                              certifierDesignation: "Notary Public",
+                              certifierOrganization: "Johnson Notary Services",
+                              sha256Hash: "7d6fd7774f0d87624da6dcf16d0aae3985d7b58972833766a4eb6206ea20ab47",
+                              verificationLink: "https://doculegalize.com/verify/DL-B3C5D2E8"
                             },
                             {
                               id: 3,
@@ -199,15 +247,31 @@ const Certificates = () => {
                                 </Badge>
                               </td>
                               <td className="p-3">
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  className="text-legal-primary hover:text-legal-dark hover:bg-legal-light"
-                                  onClick={() => handleViewCertificate(cert)}
-                                >
-                                  <EyeIcon className="h-4 w-4 mr-1.5" />
-                                  View
-                                </Button>
+                                <div className="flex space-x-2">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="text-legal-primary hover:text-legal-dark hover:bg-legal-light"
+                                    onClick={() => handleViewCertificate(cert)}
+                                  >
+                                    <EyeIcon className="h-4 w-4 mr-1.5" />
+                                    View
+                                  </Button>
+                                  {cert.status === "valid" && (
+                                    <Button
+                                      variant="ghost" 
+                                      size="sm"
+                                      className="text-legal-primary hover:text-legal-dark hover:bg-legal-light"
+                                      onClick={() => {
+                                        handleViewCertificate(cert);
+                                        setActiveTab("preview");
+                                      }}
+                                    >
+                                      <Download className="h-4 w-4 mr-1.5" />
+                                      Download
+                                    </Button>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           ))}
@@ -245,7 +309,12 @@ const Certificates = () => {
                           id: Math.floor(Math.random() * 1000),
                           document: doc,
                           date: format(now, "MMM dd, yyyy"),
-                          verificationId: "DL-" + Math.random().toString(36).substring(2, 10).toUpperCase()
+                          verificationId: "DL-" + Math.random().toString(36).substring(2, 10).toUpperCase(),
+                          certifierName: "Current User",
+                          certifierDesignation: "Legal Administrator",
+                          certifierOrganization: "DocuLegalize Platform",
+                          sha256Hash: generateMockSHA256(),
+                          verificationLink: `https://doculegalize.com/verify/DL-${Math.random().toString(36).substring(2, 10).toUpperCase()}`
                         };
                         
                         handleViewCertificate(newCert);
