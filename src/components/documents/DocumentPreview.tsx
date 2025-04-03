@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,6 +14,27 @@ interface DocumentPreviewProps {
   documentId?: string;
 }
 
+interface OCRMetadata {
+  confidence: number;
+  pageCount?: number;
+  parties?: string[];
+  dates?: string[];
+  keywords?: string[];
+  documentType?: string;
+  confidentialityLevel?: string;
+  author?: string;
+  creationDate?: string;
+}
+
+interface StructuredContent {
+  title?: string;
+  sections: { heading?: string; content: string; level: number }[];
+  tables?: { description: string; location: string }[];
+  signatures?: { name?: string; position?: string; date?: string }[];
+  legalReferences?: string[];
+  definitions?: Record<string, string>;
+}
+
 const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) => {
   const { data: documentData, isLoading, error } = useDocument(documentId);
   const certificateMutation = useGenerateCertificate();
@@ -23,27 +43,10 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
   const [extractedText, setExtractedText] = useState<string | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [formatType, setFormatType] = useState<'plain' | 'json' | 'structured'>('plain');
-  const [ocrMetadata, setOcrMetadata] = useState<{
-    confidence: number;
-    pageCount?: number;
-    parties?: string[];
-    dates?: string[];
-    keywords?: string[];
-    documentType?: string;
-    confidentialityLevel?: string;
-    author?: string;
-    creationDate?: string;
-  } | null>(null);
-  const [structuredContent, setStructuredContent] = useState<{
-    title?: string;
-    sections: { heading?: string; content: string; level: number }[];
-    tables?: { description: string; location: string }[];
-    signatures?: { name?: string; position?: string; date?: string }[];
-    legalReferences?: string[];
-    definitions?: Record<string, string>;
-  } | null>(null);
-  const [certificateData, setCertificateData] = useState<{
+  const [formatType, setFormatType] = useState<'plain' | 'structured'>('plain');
+  const [ocrMetadata, setOcrMetadata<OCRMetadata | null>(null);
+  const [structuredContent, setStructuredContent<StructuredContent | null>(null);
+  const [certificateData, setCertificateData<{
     id: string;
     documentName: string;
     date: string;
@@ -185,16 +188,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
     
     // In a real app, we would fetch the document file
     if (activeTab === "textContent" && extractedText) {
-      if (formatType === 'json' && ocrMetadata && structuredContent) {
-        // Create JSON output
-        content = ocrService.convertToJSON({
-          text: extractedText,
-          confidence: ocrMetadata.confidence,
-          metadata: ocrMetadata,
-          structuredContent: structuredContent
-        });
-        filename = `${documentData.name.replace(/\.[^/.]+$/, '')}_extracted.json`;
-      } else if (formatType === 'structured' && ocrMetadata && structuredContent) {
+      if (formatType === 'structured' && ocrMetadata && structuredContent) {
         // Create structured text output
         content = ocrService.exportAsText({
           text: extractedText,
@@ -687,14 +681,6 @@ The computer was operating properly and the accuracy of the information is not d
                         <ScrollText className="h-4 w-4 mr-1.5" />
                         Structured
                       </Button>
-                      <Button 
-                        variant={formatType === 'json' ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setFormatType('json')}
-                      >
-                        <Database className="h-4 w-4 mr-1.5" />
-                        JSON
-                      </Button>
                     </div>
                   </div>
 
@@ -766,27 +752,6 @@ The computer was operating properly and the accuracy of the information is not d
                         </div>
                       </div>
                     )}
-                    {formatType === 'json' && structuredContent && ocrMetadata && (
-                      JSON.stringify({
-                        documentInfo: {
-                          type: ocrMetadata.documentType,
-                          confidentiality: ocrMetadata.confidentialityLevel,
-                          creationDate: ocrMetadata.creationDate,
-                          author: ocrMetadata.author,
-                          pageCount: ocrMetadata.pageCount,
-                        },
-                        parties: ocrMetadata.parties,
-                        dates: ocrMetadata.dates,
-                        keywords: ocrMetadata.keywords,
-                        legalReferences: structuredContent.legalReferences,
-                        content: structuredContent.sections.map(section => ({
-                          heading: section.heading,
-                          content: section.content,
-                          level: section.level
-                        })),
-                        ocrConfidence: ocrMetadata.confidence
-                      }, null, 2)
-                    )}
                   </pre>
                   <div className="flex justify-end pt-4 border-t mt-4">
                     <Button 
@@ -795,7 +760,7 @@ The computer was operating properly and the accuracy of the information is not d
                       onClick={handleDownload}
                     >
                       <DownloadIcon className="h-4 w-4 mr-1.5" />
-                      Download {formatType === 'json' ? 'JSON' : formatType === 'structured' ? 'Structured Text' : 'Plain Text'}
+                      Download {formatType === 'structured' ? 'Structured Text' : 'Plain Text'}
                     </Button>
                     <Button 
                       variant="outline" 
