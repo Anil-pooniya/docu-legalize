@@ -1,6 +1,4 @@
-
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/e49f7895-4c55-49ee-bd1f-024e6654976a) and start prompting.
+(https://lovable.dev/projects/e49f7895-4c55-49ee-bd1f-024e6654976a) 
 
 Changes made via Lovable will be committed automatically to this repo.
 
