@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, DownloadIcon, PrinterIcon, CheckCircleIcon, Loader2, Save, ScrollText, FileSearch } from "lucide-react";
+import { FileText, DownloadIcon, PrinterIcon, CheckCircleIcon, Loader2, Save, ScrollText, FileSearch, Tag, Users, Calendar } from "lucide-react";
 import { useDocument, useGenerateCertificate, useUpdateDocumentContent } from "@/services/documentService";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/use-toast";
@@ -29,6 +29,10 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
     parties?: string[];
     dates?: string[];
     keywords?: string[];
+    documentType?: string;
+    confidentialityLevel?: string;
+    author?: string;
+    creationDate?: string;
   } | null>(null);
   const [certificateData, setCertificateData] = useState<{
     id: string;
@@ -93,7 +97,13 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
       setOcrMetadata({
         confidence: result.confidence,
         pageCount: result.metadata.pageCount,
+        parties: result.metadata.parties,
+        dates: result.metadata.dates,
         keywords: result.metadata.keywords,
+        documentType: result.metadata.documentType,
+        confidentialityLevel: result.metadata.confidentialityLevel,
+        author: result.metadata.author,
+        creationDate: result.metadata.creationDate
       });
       
       // Save the extracted text to the document
@@ -481,19 +491,25 @@ The computer was operating properly and the accuracy of the information is not d
                 </div>
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Document Type</dt>
-                  <dd className="mt-1 text-sm text-gray-900">{documentData.type === 'pdf' ? 'PDF Document' : 'Image'}</dd>
+                  <dd className="mt-1 text-sm text-gray-900">
+                    {ocrMetadata?.documentType || (documentData.type === 'pdf' ? 'PDF Document' : 'Image')}
+                  </dd>
                 </div>
                 <div>
-                  <dt className="text-sm font-medium text-gray-500">Created By</dt>
-                  <dd className="mt-1 text-sm text-gray-900">DocuLegalize System</dd>
+                  <dt className="text-sm font-medium text-gray-500">Author</dt>
+                  <dd className="mt-1 text-sm text-gray-900">
+                    {ocrMetadata?.author || "Unknown"}
+                  </dd>
                 </div>
                 <div>
-                  <dt className="text-sm font-medium text-gray-500">Modified Date</dt>
-                  <dd className="mt-1 text-sm text-gray-900">{new Date(documentData.date).toLocaleDateString()}</dd>
+                  <dt className="text-sm font-medium text-gray-500">Creation Date</dt>
+                  <dd className="mt-1 text-sm text-gray-900">
+                    {ocrMetadata?.creationDate ? new Date(ocrMetadata.creationDate).toLocaleDateString() : new Date(documentData.date).toLocaleDateString()}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Pages</dt>
-                  <dd className="mt-1 text-sm text-gray-900">{ocrMetadata?.pageCount || 4}</dd>
+                  <dd className="mt-1 text-sm text-gray-900">{ocrMetadata?.pageCount || 1}</dd>
                 </div>
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Legal Status</dt>
@@ -513,19 +529,67 @@ The computer was operating properly and the accuracy of the information is not d
                         {Math.round(ocrMetadata.confidence * 100)}%
                       </dd>
                     </div>
-                    {ocrMetadata.keywords && (
-                      <div>
-                        <dt className="text-sm font-medium text-gray-500">Keywords</dt>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Confidentiality Level</dt>
+                      <dd className="mt-1 text-sm text-gray-900">
+                        {ocrMetadata.confidentialityLevel || "Standard"}
+                      </dd>
+                    </div>
+                    {ocrMetadata.dates && ocrMetadata.dates.length > 0 && (
+                      <div className="col-span-2">
+                        <dt className="text-sm font-medium text-gray-500 flex items-center">
+                          <Calendar className="h-4 w-4 mr-1.5 text-gray-400" />
+                          Key Dates
+                        </dt>
                         <dd className="mt-1 text-sm text-gray-900">
                           <div className="flex flex-wrap gap-1">
-                            {ocrMetadata.keywords.slice(0, 5).map((keyword, index) => (
+                            {ocrMetadata.dates.map((date, index) => (
                               <Badge key={index} variant="outline" className="bg-blue-50">
+                                {date}
+                              </Badge>
+                            ))}
+                          </div>
+                        </dd>
+                      </div>
+                    )}
+                    {ocrMetadata.parties && ocrMetadata.parties.length > 0 && (
+                      <div className="col-span-2">
+                        <dt className="text-sm font-medium text-gray-500 flex items-center">
+                          <Users className="h-4 w-4 mr-1.5 text-gray-400" />
+                          Parties Involved
+                        </dt>
+                        <dd className="mt-1 text-sm text-gray-900">
+                          <div className="flex flex-wrap gap-1">
+                            {ocrMetadata.parties.slice(0, 5).map((party, index) => (
+                              <Badge key={index} variant="outline" className="bg-amber-50">
+                                {party}
+                              </Badge>
+                            ))}
+                            {(ocrMetadata.parties.length > 5) && (
+                              <Badge variant="outline" className="bg-amber-50">
+                                +{ocrMetadata.parties.length - 5} more
+                              </Badge>
+                            )}
+                          </div>
+                        </dd>
+                      </div>
+                    )}
+                    {ocrMetadata.keywords && ocrMetadata.keywords.length > 0 && (
+                      <div className="col-span-2">
+                        <dt className="text-sm font-medium text-gray-500 flex items-center">
+                          <Tag className="h-4 w-4 mr-1.5 text-gray-400" />
+                          Keywords
+                        </dt>
+                        <dd className="mt-1 text-sm text-gray-900">
+                          <div className="flex flex-wrap gap-1">
+                            {ocrMetadata.keywords.slice(0, 8).map((keyword, index) => (
+                              <Badge key={index} variant="outline" className="bg-green-50">
                                 {keyword}
                               </Badge>
                             ))}
-                            {ocrMetadata.keywords.length > 5 && (
-                              <Badge variant="outline" className="bg-blue-50">
-                                +{ocrMetadata.keywords.length - 5} more
+                            {(ocrMetadata.keywords.length > 8) && (
+                              <Badge variant="outline" className="bg-green-50">
+                                +{ocrMetadata.keywords.length - 8} more
                               </Badge>
                             )}
                           </div>
