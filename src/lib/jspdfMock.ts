@@ -28,7 +28,16 @@ export default class jsPDF {
 
   html(element: HTMLElement | string, options?: any) {
     // Mock implementation
-    console.log('Converting HTML to PDF', options);
+    console.log('Converting HTML to PDF', element, options);
+    
+    // If options.callback is provided, execute it with this instance
+    if (options && typeof options.callback === 'function') {
+      setTimeout(() => {
+        options.callback(this);
+      }, 100);
+    }
+    
+    // Return a promise for compatibility with promise-based usage
     return new Promise<jsPDF>((resolve) => {
       setTimeout(() => {
         console.log('HTML converted to PDF');

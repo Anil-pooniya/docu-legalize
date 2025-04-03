@@ -1,6 +1,6 @@
 
 import React from "react";
-import jsPDF from "jspdf";
+import jsPDF from "@/lib/jspdfMock"; // Use our mock implementation instead of actual jspdf
 import { FileText, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -39,6 +39,7 @@ const Section65BCertificate: React.FC<Section65BCertificateProps> = ({
         format: "a4"
       });
       
+      // Use the mock's html method that returns a promise
       doc.html(certificateRef.current, {
         callback: function(pdf) {
           pdf.save(`Section65B_Certificate_${verificationId}.pdf`);
