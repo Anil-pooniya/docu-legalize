@@ -15,6 +15,25 @@ interface OCRResult {
     documentType?: string;
     confidentialityLevel?: string;
   };
+  structuredContent?: {
+    title?: string;
+    sections: {
+      heading?: string;
+      content: string;
+      level: number;
+    }[];
+    tables?: {
+      description: string;
+      location: string;
+    }[];
+    signatures?: {
+      name?: string;
+      position?: string;
+      date?: string;
+    }[];
+    legalReferences?: string[];
+    definitions?: Record<string, string>;
+  };
 }
 
 // OCR service functions
@@ -45,9 +64,13 @@ const ocrService = {
       const keywords = extractKeywords(extractedText);
       const documentType = determineDocumentType(extractedText, file.name);
       const confidentialityLevel = determineConfidentiality(extractedText);
+      const legalReferences = extractLegalReferences(extractedText);
       
       // Extract additional metadata from the file itself when possible
       const fileMetadata = await extractFileMetadata(file);
+      
+      // Parse the document into structured sections
+      const structuredContent = parseDocumentStructure(extractedText);
       
       // Return structured OCR result with comprehensive metadata
       return {
@@ -62,7 +85,8 @@ const ocrService = {
           dates: dates,
           documentType: documentType,
           confidentialityLevel: confidentialityLevel
-        }
+        },
+        structuredContent: structuredContent
       };
     } catch (error) {
       console.error("OCR processing error:", error);
@@ -89,8 +113,8 @@ const ocrService = {
   },
   
   // Save extracted text to a document
-  saveExtractedText: async (documentId: string, text: string): Promise<void> => {
-    // In a real app: return api.post(`/documents/${documentId}/content`, { text });
+  saveExtractedText: async (documentId: string, text: string, structuredContent?: any): Promise<void> => {
+    // In a real app: return api.post(`/documents/${documentId}/content`, { text, structuredContent });
     
     // Get the mock documents from localStorage
     const storedDocs = localStorage.getItem('documents');
@@ -104,6 +128,9 @@ const ocrService = {
         // If the document exists, update its content
         if (docIndex !== -1) {
           docs[docIndex].content = text;
+          if (structuredContent) {
+            docs[docIndex].structuredContent = structuredContent;
+          }
           // Save back to localStorage
           localStorage.setItem('documents', JSON.stringify(docs));
         }
@@ -139,10 +166,289 @@ const ocrService = {
     }
     
     return metadata;
+  },
+
+  // Convert OCR results to JSON format
+  convertToJSON: (result: OCRResult): string => {
+    // Create a clean JSON structure of the OCR results
+    const jsonOutput = {
+      documentInfo: {
+        type: result.metadata.documentType,
+        confidentiality: result.metadata.confidentialityLevel,
+        creationDate: result.metadata.creationDate,
+        author: result.metadata.author,
+        pageCount: result.metadata.pageCount,
+      },
+      parties: result.metadata.parties,
+      dates: result.metadata.dates,
+      keywords: result.metadata.keywords,
+      legalReferences: result.structuredContent?.legalReferences || [],
+      content: result.structuredContent?.sections.map(section => ({
+        heading: section.heading,
+        content: section.content,
+        level: section.level
+      })),
+      ocrConfidence: result.confidence
+    };
+    
+    return JSON.stringify(jsonOutput, null, 2);
+  },
+
+  // Export to downloadable text format
+  exportAsText: (result: OCRResult): Blob => {
+    let textOutput = "";
+    
+    // Add document title if available
+    if (result.structuredContent?.title) {
+      textOutput += result.structuredContent.title + "\n\n";
+    }
+    
+    // Add document type and metadata
+    textOutput += `DOCUMENT TYPE: ${result.metadata.documentType || "Unknown"}\n`;
+    textOutput += `DATE: ${result.metadata.dates && result.metadata.dates.length > 0 ? result.metadata.dates[0] : "Unknown"}\n`;
+    textOutput += `PARTIES: ${result.metadata.parties ? result.metadata.parties.join(", ") : "None detected"}\n\n`;
+    
+    // Add sections with proper formatting
+    if (result.structuredContent?.sections) {
+      result.structuredContent.sections.forEach(section => {
+        if (section.heading) {
+          textOutput += "\n" + "=".repeat(section.level * 2) + " " + section.heading + " " + "=".repeat(section.level * 2) + "\n\n";
+        }
+        textOutput += section.content + "\n\n";
+      });
+    } else {
+      // If no structured content, just add the raw text
+      textOutput += result.text;
+    }
+    
+    // Add OCR confidence information
+    textOutput += "\n\n" + "=".repeat(40) + "\n";
+    textOutput += `OCR CONFIDENCE: ${Math.round(result.confidence * 100)}%\n`;
+    textOutput += "=".repeat(40) + "\n";
+    
+    return new Blob([textOutput], { type: 'text/plain' });
   }
 };
 
 // Helper functions for text analysis and metadata extraction
+
+// Parse document into a structured format with sections, headings, etc.
+function parseDocumentStructure(text: string) {
+  const lines = text.split('\n');
+  const sections: { heading?: string; content: string; level: number }[] = [];
+  const legalReferences: string[] = [];
+  const definitions: Record<string, string> = {};
+  
+  let currentSection: { heading?: string; content: string; level: number } | null = null;
+  let title = "";
+  
+  // Look for title in the first few lines
+  for (let i = 0; i < Math.min(5, lines.length); i++) {
+    if (lines[i].trim().length > 0 && lines[i].trim().length < 100 && lines[i].toUpperCase() === lines[i]) {
+      title = lines[i].trim();
+      break;
+    }
+  }
+  
+  // Process each line for sections, definitions, and legal references
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    
+    // Skip empty lines
+    if (line.length === 0) continue;
+    
+    // Check for section headings
+    // Common patterns: "1. INTRODUCTION", "ARTICLE I", "Section 1.1", etc.
+    const headingPattern = /^(?:(?:[0-9]+\.(?:[0-9]\.?)*)|(?:ARTICLE [IVX]+)|(?:SECTION [0-9\.]+)|(?:[IVX]+\.))\s+([A-Z][A-Z\s]+)$/i;
+    const match = line.match(headingPattern);
+    
+    if (match || (line.toUpperCase() === line && line.length < 100 && line.length > 10 && !line.includes(":"))) {
+      // If there's a current section, push it to the array
+      if (currentSection) {
+        sections.push(currentSection);
+      }
+      
+      // Create a new section with the heading
+      const heading = match ? match[1] : line;
+      const level = line.startsWith("ARTICLE") ? 1 : 
+                   (line.match(/^[0-9]+\.(?![0-9])/) ? 2 : 
+                   (line.match(/^[0-9]+\.[0-9]+\.?/) ? 3 : 2));
+      
+      currentSection = {
+        heading: heading,
+        content: "",
+        level: level
+      };
+      
+      continue;
+    }
+    
+    // Check for legal references (statutes, acts, regulations, etc.)
+    const legalRefPatterns = [
+      /(?:section|sec\.|§)\s+[0-9\.]+\s+of\s+the\s+([A-Za-z\s]+(?:Act|Code|Regulation|Statute))/gi,
+      /([A-Za-z\s]+(?:Act|Code|Regulation|Statute))\s+of\s+[0-9]{4}/gi,
+      /under\s+([A-Za-z\s]+(?:Act|Code|Law))/gi
+    ];
+    
+    legalRefPatterns.forEach(pattern => {
+      const matches = line.matchAll(pattern);
+      for (const match of matches) {
+        if (match[1] && !legalReferences.includes(match[1])) {
+          legalReferences.push(match[1]);
+        }
+      }
+    });
+    
+    // Check for definitions
+    // Common pattern: "Term" means definition...
+    const definitionPattern = /"([^"]+)"\s+(?:means|shall mean|is defined as)\s+(.+?)(?:;|$)/i;
+    const defMatch = line.match(definitionPattern);
+    if (defMatch) {
+      definitions[defMatch[1]] = defMatch[2];
+    }
+    
+    // Append content to the current section
+    if (currentSection) {
+      if (currentSection.content.length > 0) {
+        currentSection.content += " " + line;
+      } else {
+        currentSection.content = line;
+      }
+    } else {
+      // If there's no current section, create a default one
+      currentSection = {
+        content: line,
+        level: 0
+      };
+    }
+  }
+  
+  // Don't forget to add the last section
+  if (currentSection) {
+    sections.push(currentSection);
+  }
+  
+  // Detect tables based on text patterns
+  const tables = detectTables(text);
+  
+  // Detect signatures based on text patterns
+  const signatures = detectSignatures(text);
+  
+  return {
+    title,
+    sections,
+    tables,
+    signatures,
+    legalReferences,
+    definitions
+  };
+}
+
+// Detect tables in the text
+function detectTables(text: string) {
+  const tables: { description: string; location: string }[] = [];
+  const lines = text.split('\n');
+  
+  for (let i = 0; i < lines.length; i++) {
+    // Look for lines with multiple column separators (|, or multiple spaces)
+    if ((lines[i].match(/\|/g) || []).length >= 2 || 
+        lines[i].match(/\s{3,}[^\s]+\s{3,}[^\s]+/)) {
+      
+      // Check if subsequent lines have similar pattern to confirm it's a table
+      let isTable = false;
+      for (let j = 1; j < 3 && i + j < lines.length; j++) {
+        if ((lines[i + j].match(/\|/g) || []).length >= 2 || 
+            lines[i + j].match(/\s{3,}[^\s]+\s{3,}[^\s]+/)) {
+          isTable = true;
+          break;
+        }
+      }
+      
+      if (isTable) {
+        // Try to find table title or description
+        let description = "Table";
+        for (let j = i - 3; j < i; j++) {
+          if (j >= 0 && lines[j].trim().length > 0 && 
+              (lines[j].toLowerCase().includes("table") || 
+               lines[j].toLowerCase().includes("schedule"))) {
+            description = lines[j].trim();
+            break;
+          }
+        }
+        
+        tables.push({
+          description,
+          location: `Line ${i+1}`
+        });
+        
+        // Skip to the end of the table
+        while (i < lines.length && 
+              ((lines[i].match(/\|/g) || []).length >= 2 || 
+               lines[i].match(/\s{3,}[^\s]+\s{3,}[^\s]+/))) {
+          i++;
+        }
+      }
+    }
+  }
+  
+  return tables;
+}
+
+// Detect signatures in the text
+function detectSignatures(text: string) {
+  const signatures: { name?: string; position?: string; date?: string }[] = [];
+  const lines = text.split('\n');
+  
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].toLowerCase().includes("signed") || 
+        lines[i].toLowerCase().includes("signature") || 
+        lines[i].match(/^[_\.]{3,}$/)) {
+      
+      let name, position, date;
+      
+      // Look for name
+      for (let j = i + 1; j < i + 4 && j < lines.length; j++) {
+        if (lines[j].trim().length > 0 && 
+            !lines[j].toLowerCase().includes("date") && 
+            !lines[j].match(/^[_\.]{3,}$/)) {
+          name = lines[j].trim();
+          break;
+        }
+      }
+      
+      // Look for position
+      for (let j = i + 2; j < i + 5 && j < lines.length; j++) {
+        if (lines[j].trim().length > 0 && 
+            lines[j].trim() !== name && 
+            !lines[j].toLowerCase().includes("date") && 
+            !lines[j].match(/^[_\.]{3,}$/)) {
+          position = lines[j].trim();
+          break;
+        }
+      }
+      
+      // Look for date
+      for (let j = i - 3; j < i + 5 && j < lines.length; j++) {
+        if (j >= 0 && (lines[j].toLowerCase().includes("date") || 
+            lines[j].match(/\d{1,2}[\/\.-]\d{1,2}[\/\.-]\d{2,4}/))) {
+          date = lines[j].replace(/date\s*:\s*/i, "").trim();
+          break;
+        }
+      }
+      
+      signatures.push({
+        name,
+        position,
+        date
+      });
+      
+      // Skip a few lines to avoid detecting the same signature multiple times
+      i += 3;
+    }
+  }
+  
+  return signatures;
+}
 
 // Attempt to extract file metadata using File API
 async function extractFileMetadata(file: File): Promise<Record<string, any>> {
@@ -198,15 +504,45 @@ function determineDocumentType(text: string, fileName: string): string {
   
   // Check for common document types based on content patterns
   if (lowerText.includes('agreement') || lowerText.includes('contract') || lowerText.includes('parties agree')) {
+    if (lowerText.includes('employment') || lowerText.includes('employer') || lowerText.includes('employee')) {
+      return 'Employment Contract';
+    } else if (lowerText.includes('lease') || lowerText.includes('landlord') || lowerText.includes('tenant')) {
+      return 'Lease Agreement';
+    } else if (lowerText.includes('purchase') || lowerText.includes('buyer') || lowerText.includes('seller')) {
+      return 'Purchase Agreement';
+    } else if (lowerText.includes('service') || lowerText.includes('client')) {
+      return 'Service Agreement';
+    }
     return 'Contract/Agreement';
   } else if (lowerText.includes('court') || lowerText.includes('case no') || lowerText.includes('plaintiff') || lowerText.includes('defendant')) {
+    if (lowerText.includes('motion') || lowerText.includes('hereby moves')) {
+      return 'Legal Motion';
+    } else if (lowerText.includes('complaint') || lowerText.includes('allege')) {
+      return 'Complaint Filing';
+    } else if (lowerText.includes('appeal') || lowerText.includes('appellant')) {
+      return 'Appeal Brief';
+    }
     return 'Legal Filing';
   } else if (lowerText.includes('deed') || lowerText.includes('property') || lowerText.includes('conveyance')) {
+    if (lowerText.includes('trust')) {
+      return 'Deed of Trust';
+    } else if (lowerText.includes('sale')) {
+      return 'Deed of Sale';
+    }
     return 'Property Document';
   } else if (lowerText.includes('testimony') || lowerText.includes('witness') || lowerText.includes('affirm') || lowerText.includes('swear')) {
+    if (lowerText.includes('affidavit')) {
+      return 'Affidavit';
+    }
     return 'Testimony/Affidavit';
+  } else if (lowerText.includes('will') || lowerText.includes('testament') || lowerText.includes('bequest') || lowerText.includes('executor')) {
+    return 'Will/Testament';
+  } else if (lowerText.includes('power of attorney') || lowerText.includes('attorney-in-fact')) {
+    return 'Power of Attorney';
   } else if (lowerFileName.includes('invoice') || lowerText.includes('invoice') || lowerText.includes('payment')) {
     return 'Invoice/Financial';
+  } else if (lowerText.includes('policy') || lowerText.includes('insured') || lowerText.includes('coverage')) {
+    return 'Insurance Policy';
   }
   
   // If no specific type is detected
@@ -243,6 +579,13 @@ function extractParties(text: string): string[] {
     /PLAINTIFF:[\s\S]*?([A-Z][A-Za-z\s,\.]+)/i,
     /DEFENDANT:[\s\S]*?([A-Z][A-Za-z\s,\.]+)/i,
     /([A-Z][A-Za-z\s]{2,30})(?:,| and| &) ([A-Z][A-Za-z\s]{2,30})/g,
+    /party of the first part:[\s\S]*?([A-Z][A-Za-z\s,\.]+)/i,
+    /party of the second part:[\s\S]*?([A-Z][A-Za-z\s,\.]+)/i,
+    /lessor:[\s\S]*?([A-Z][A-Za-z\s,\.]+)/i,
+    /lessee:[\s\S]*?([A-Z][A-Za-z\s,\.]+)/i,
+    /employer:[\s\S]*?([A-Z][A-Za-z\s,\.]+)/i,
+    /employee:[\s\S]*?([A-Z][A-Za-z\s,\.]+)/i,
+    /([A-Z][A-Za-z\s\.]+)(?:, hereinafter referred to as)/i
   ];
   
   partyPatterns.forEach(pattern => {
@@ -250,7 +593,7 @@ function extractParties(text: string): string[] {
     if (matches) {
       matches.forEach(match => {
         // Clean up the match to extract just the name
-        let party = match.replace(/BETWEEN:|AND:|,.*$|PLAINTIFF:|DEFENDANT:/i, '').trim();
+        let party = match.replace(/BETWEEN:|AND:|,.*$|PLAINTIFF:|DEFENDANT:|party of the first part:|party of the second part:|lessor:|lessee:|employer:|employee:|hereinafter referred to as|, a corporation|, a company|, an individual/i, '').trim();
         if (party && !parties.includes(party) && party.length > 3 && party.length < 50) {
           parties.push(party);
         }
@@ -271,7 +614,10 @@ function extractDates(text: string): string[] {
     /(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{4})/g,
     /(\d{4})[\/\.-](\d{1,2})[\/\.-](\d{1,2})/g,
     /(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* (\d{1,2})(?:st|nd|rd|th)?,? (\d{4})/gi,
-    /(?:January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2})(?:st|nd|rd|th)?,? (\d{4})/gi
+    /(?:January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2})(?:st|nd|rd|th)?,? (\d{4})/gi,
+    /executed on (?:the )?(\d{1,2})(?:st|nd|rd|th)? (?:day )?(?:of )?(?:January|February|March|April|May|June|July|August|September|October|November|December),? (\d{4})/gi,
+    /dated (?:this )?(\d{1,2})(?:st|nd|rd|th)? (?:day )?(?:of )?(?:January|February|March|April|May|June|July|August|September|October|November|December),? (\d{4})/gi,
+    /effective (?:as of |date |from )(?:the )?(\d{1,2})(?:st|nd|rd|th)? (?:day )?(?:of )?(?:January|February|March|April|May|June|July|August|September|October|November|December),? (\d{4})/gi
   ];
   
   datePatterns.forEach(pattern => {
@@ -288,6 +634,32 @@ function extractDates(text: string): string[] {
   return dates;
 }
 
+// Extract legal references
+function extractLegalReferences(text: string): string[] {
+  const references: string[] = [];
+  
+  // Look for references to laws, acts, sections, etc.
+  const referencePatterns = [
+    /(?:section|sec\.|§)\s+([0-9\.]+)\s+of\s+the\s+([A-Za-z\s]+(?:Act|Code|Regulation|Statute))/gi,
+    /([A-Za-z\s]+(?:Act|Code|Regulation|Statute))\s+of\s+([0-9]{4})/gi,
+    /(?:pursuant to|under|in accordance with)\s+(?:the\s+)?([A-Za-z\s]+(?:Act|Code|Law|Regulation))/gi,
+    /(?:Article|Section)\s+([IVX]+|[0-9\.]+)\s+of\s+(?:the\s+)?([A-Za-z\s]+)/gi
+  ];
+  
+  referencePatterns.forEach(pattern => {
+    const matches = text.match(pattern);
+    if (matches) {
+      matches.forEach(match => {
+        if (!references.includes(match.trim())) {
+          references.push(match.trim());
+        }
+      });
+    }
+  });
+  
+  return references;
+}
+
 // Extract relevant legal keywords
 function extractKeywords(text: string): string[] {
   const legalKeywords = [
@@ -298,7 +670,11 @@ function extractKeywords(text: string): string[] {
     'dispute', 'damages', 'negligence', 'breach', 'remedy', 'covenant',
     'indemnify', 'injunction', 'mediation', 'statute', 'lawsuit', 'plaintiff',
     'affidavit', 'stipulation', 'provision', 'recital', 'whereas', 'herein',
-    'executor', 'trustee', 'probate', 'fiduciary', 'beneficiary', 'litigation'
+    'executor', 'trustee', 'probate', 'fiduciary', 'beneficiary', 'litigation',
+    'hearing', 'judgment', 'ruling', 'decree', 'order', 'motion', 'pleading',
+    'allegation', 'deposition', 'testimony', 'subpoena', 'summons', 'venue',
+    'compensation', 'consideration', 'waiver', 'disclosure', 'amendment',
+    'severability', 'counterpart', 'force majeure', 'satisfaction', 'default'
   ];
   
   const foundKeywords: string[] = [];
@@ -323,6 +699,18 @@ function extractKeywords(text: string): string[] {
     });
   }
   
+  // Look for defined terms - typically in quotes or ALL CAPS
+  const definedTermPattern = /"([^"]+)"/g;
+  const definedTermMatches = text.match(definedTermPattern);
+  if (definedTermMatches) {
+    definedTermMatches.forEach(match => {
+      const term = match.replace(/"/g, '').toLowerCase();
+      if (term.length > 1 && !foundKeywords.includes(term) && !term.match(/^(and|the|or|of|to|in|for|with|by|at|from)$/i)) {
+        foundKeywords.push(term);
+      }
+    });
+  }
+  
   return foundKeywords;
 }
 
@@ -334,6 +722,7 @@ function fallbackExtraction(file: File): OCRResult {
   let documentType = "Unknown Document";
   let parties: string[] = [];
   let dates: string[] = [];
+  let structuredContent: any = { sections: [] };
   
   if (fileName.includes("contract") || fileName.includes("agreement")) {
     documentType = "Contract/Agreement";
@@ -366,6 +755,23 @@ NOW THEREFORE THIS AGREEMENT WITNESSES that in consideration of the mutual coven
 
     parties = ["ABC CORPORATION", "XYZ LIMITED"];
     dates = ["15th day of November, 2023"];
+    
+    structuredContent = {
+      title: "CONTRACT AGREEMENT",
+      sections: [
+        {
+          heading: "TERM OF AGREEMENT",
+          content: "This Agreement shall commence on the date first written above and shall continue for a period of two (2) years (the \"Term\").",
+          level: 1
+        },
+        {
+          heading: "SERVICES",
+          content: "XYZ shall provide legal consulting services to ABC as described in Schedule \"A\" attached hereto. XYZ shall ensure that all services are performed with reasonable skill and care.",
+          level: 1
+        }
+      ],
+      legalReferences: []
+    };
   } else if (fileName.includes("property") || fileName.includes("deed")) {
     documentType = "Property Document";
     extractedText = `PROPERTY DEED
@@ -386,6 +792,25 @@ AND WHEREAS the Vendor has agreed to sell and the Purchaser has agreed to purcha
 
     parties = ["Mr. John Smith", "Mrs. Jane Doe"];
     dates = ["12th day of November, 2023"];
+    
+    structuredContent = {
+      title: "PROPERTY DEED",
+      sections: [
+        {
+          content: "THIS DEED OF CONVEYANCE made on this 12th day of November, 2023 BETWEEN Mr. John Smith, son of Mr. Robert Smith, resident of 456 Park Avenue, Delhi (hereinafter called the \"VENDOR\") AND Mrs. Jane Doe, daughter of Mr. William Doe, resident of 789 Lake View, Mumbai (hereinafter called the \"PURCHASER\")",
+          level: 0
+        },
+        {
+          content: "WHEREAS the Vendor is the absolute owner of the property situated at 123 Main Street, comprising of a plot measuring 2400 sq. ft. along with a two-story building constructed thereon.",
+          level: 0
+        },
+        {
+          content: "AND WHEREAS the Vendor has agreed to sell and the Purchaser has agreed to purchase the said property for a total consideration of Rs. 1,25,00,000/- (Rupees One Crore Twenty-Five Lakhs only).",
+          level: 0
+        }
+      ],
+      legalReferences: []
+    };
   } else if (fileName.includes("court") || fileName.includes("filing")) {
     documentType = "Legal Filing";
     extractedText = `IN THE HIGH COURT OF DELHI
@@ -410,6 +835,28 @@ MOST RESPECTFULLY SHOWETH:
 
     parties = ["ABC Corporation Pvt. Ltd.", "Union of India & Ors."];
     dates = ["01.10.2023", "2023"];
+    
+    structuredContent = {
+      title: "CIVIL WRIT PETITION",
+      sections: [
+        {
+          heading: "IN THE MATTER OF",
+          content: "ABC Corporation Pvt. Ltd. ... PETITIONER VERSUS Union of India & Ors. ... RESPONDENTS",
+          level: 1
+        },
+        {
+          heading: "PETITION UNDER ARTICLE 226 OF THE CONSTITUTION OF INDIA",
+          content: "For the issuance of writ of mandamus",
+          level: 1
+        },
+        {
+          heading: "MOST RESPECTFULLY SHOWETH",
+          content: "1. That the present petition is being filed challenging the order dated 01.10.2023 passed by Respondent No.2, whereby the application of the Petitioner for renewal of license has been arbitrarily rejected.",
+          level: 1
+        }
+      ],
+      legalReferences: ["Article 226 of the Constitution of India"]
+    };
   } else if (fileName.includes("testimony") || fileName.includes("witness")) {
     documentType = "Testimony/Affidavit";
     extractedText = `WITNESS TESTIMONY
@@ -427,6 +874,33 @@ I, David Williams, being of sound mind and over 18 years of age, do hereby state
 
     parties = ["David Williams", "Mr. Smith", "Mr. Johnson"];
     dates = ["November 5, 2023", "September 15, 2023"];
+    
+    structuredContent = {
+      title: "WITNESS TESTIMONY",
+      sections: [
+        {
+          heading: "CASE INFORMATION",
+          content: "CASE: Smith v. Johnson (Case #5678) DATE: November 5, 2023 WITNESS: Mr. David Williams",
+          level: 1
+        },
+        {
+          content: "I, David Williams, being of sound mind and over 18 years of age, do hereby state as follows:",
+          level: 0
+        },
+        {
+          content: "1. I was present at the location of 782 Oak Street on September 15, 2023, at approximately 3:30 PM. 2. I directly witnessed the automobile collision between a blue sedan driven by Mr. Smith and a red SUV driven by Mr. Johnson. 3. Prior to the collision, I observed the red SUV traveling at what appeared to be well above the posted speed limit of 40 km/h. 4. The traffic signal at the intersection was clearly green for Mr. Smith's direction of travel. 5. I heard the sound of brakes being applied sharply followed immediately by the collision.",
+          level: 0
+        }
+      ],
+      signatures: [
+        {
+          name: "David Williams",
+          position: "Witness",
+          date: "November 5, 2023"
+        }
+      ],
+      legalReferences: []
+    };
   } else {
     // Generic legal document
     extractedText = `LEGAL DOCUMENT
@@ -440,10 +914,31 @@ The system has identified this as a legal document requiring further analysis by
 
     parties = ["Document Author"];
     dates = [new Date().toLocaleDateString()];
+    
+    structuredContent = {
+      title: "LEGAL DOCUMENT",
+      sections: [
+        {
+          heading: "DOCUMENT INFORMATION",
+          content: `DOCUMENT TYPE: ${fileName} DATE: ${new Date().toLocaleDateString()}`,
+          level: 1
+        },
+        {
+          content: "This document contains legal information that would typically be processed by our system. The extraction was performed using automated OCR technology to identify key elements such as parties involved, dates, obligations, and other relevant legal details.",
+          level: 0
+        },
+        {
+          content: "The system has identified this as a legal document requiring further analysis by qualified legal professionals. OCR extraction provides initial data but should be verified manually for complete accuracy.",
+          level: 0
+        }
+      ],
+      legalReferences: []
+    };
   }
   
   // Extract keywords based on the generated text
   const keywords = extractKeywords(extractedText);
+  const legalReferences = extractLegalReferences(extractedText);
   
   return {
     text: extractedText,
@@ -458,6 +953,10 @@ The system has identified this as a legal document requiring further analysis by
       documentType: documentType,
       confidentialityLevel: determineConfidentiality(extractedText)
     },
+    structuredContent: {
+      ...structuredContent,
+      legalReferences: legalReferences
+    }
   };
 }
 

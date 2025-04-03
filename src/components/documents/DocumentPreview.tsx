@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, DownloadIcon, PrinterIcon, CheckCircleIcon, Loader2, Save, ScrollText, FileSearch, Tag, Users, Calendar } from "lucide-react";
+import { FileText, DownloadIcon, PrinterIcon, CheckCircleIcon, Loader2, Save, ScrollText, FileSearch, Tag, Users, Calendar, BookOpen, Database, AlignLeft } from "lucide-react";
 import { useDocument, useGenerateCertificate, useUpdateDocumentContent } from "@/services/documentService";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/use-toast";
@@ -23,6 +23,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
   const [extractedText, setExtractedText] = useState<string | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [formatType, setFormatType] = useState<'plain' | 'json' | 'structured'>('plain');
   const [ocrMetadata, setOcrMetadata] = useState<{
     confidence: number;
     pageCount?: number;
@@ -33,6 +34,14 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
     confidentialityLevel?: string;
     author?: string;
     creationDate?: string;
+  } | null>(null);
+  const [structuredContent, setStructuredContent] = useState<{
+    title?: string;
+    sections: { heading?: string; content: string; level: number }[];
+    tables?: { description: string; location: string }[];
+    signatures?: { name?: string; position?: string; date?: string }[];
+    legalReferences?: string[];
+    definitions?: Record<string, string>;
   } | null>(null);
   const [certificateData, setCertificateData] = useState<{
     id: string;
@@ -57,6 +66,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
     setExtractedText(null);
     setCertificateData(null);
     setOcrMetadata(null);
+    setStructuredContent(null);
     
     // If document has content already, use it
     if (documentData?.content) {
@@ -106,9 +116,14 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
         creationDate: result.metadata.creationDate
       });
       
+      // Store structured content
+      if (result.structuredContent) {
+        setStructuredContent(result.structuredContent);
+      }
+      
       // Save the extracted text to the document
       if (documentData.id && result.text) {
-        await ocrService.saveExtractedText(documentData.id, result.text);
+        await ocrService.saveExtractedText(documentData.id, result.text, result.structuredContent);
       }
       
       toast({
@@ -165,16 +180,37 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
   const handleDownload = () => {
     if (!documentData) return;
     
-    // In a real app, we would fetch the document file
-    // For now, we'll create a mock text file for download
-    const element = window.document.createElement("a");
+    let filename = "";
+    let content: Blob | string = "";
     
-    let fileContent = "";
+    // In a real app, we would fetch the document file
     if (activeTab === "textContent" && extractedText) {
-      fileContent = extractedText;
+      if (formatType === 'json' && ocrMetadata && structuredContent) {
+        // Create JSON output
+        content = ocrService.convertToJSON({
+          text: extractedText,
+          confidence: ocrMetadata.confidence,
+          metadata: ocrMetadata,
+          structuredContent: structuredContent
+        });
+        filename = `${documentData.name.replace(/\.[^/.]+$/, '')}_extracted.json`;
+      } else if (formatType === 'structured' && ocrMetadata && structuredContent) {
+        // Create structured text output
+        content = ocrService.exportAsText({
+          text: extractedText,
+          confidence: ocrMetadata.confidence,
+          metadata: ocrMetadata,
+          structuredContent: structuredContent
+        });
+        filename = `${documentData.name.replace(/\.[^/.]+$/, '')}_structured.txt`;
+      } else {
+        // Plain text
+        content = extractedText;
+        filename = `${documentData.name.replace(/\.[^/.]+$/, '')}_plain.txt`;
+      }
     } else if (activeTab === "certificate" && certificateData) {
       // Get the certificate HTML and convert it to a PDF-like format
-      fileContent = `SECTION 65B CERTIFICATE
+      content = `SECTION 65B CERTIFICATE
       
 Document: ${certificateData.documentName}
 Certificate ID: ${certificateData.id}
@@ -192,18 +228,24 @@ The computer was operating properly and the accuracy of the information is not d
       `;
       
       // Set appropriate filename for certificate
-      element.download = `certificate-${certificateData.id}.txt`;
+      filename = `certificate-${certificateData.id}.txt`;
     } else {
-      fileContent = documentData?.content || `Mock content for ${documentData?.name}`;
+      content = documentData?.content || `Mock content for ${documentData?.name}`;
+      filename = documentData?.name || "document.txt";
     }
     
-    const file = new Blob([fileContent], { type: 'text/plain' });
-    element.href = URL.createObjectURL(file);
+    // Create download link
+    const element = window.document.createElement("a");
     
-    if (!element.download && documentData) {
-      element.download = documentData?.name || "document.txt";
+    // Handle different content types
+    if (typeof content === 'string') {
+      const file = new Blob([content], { type: 'text/plain' });
+      element.href = URL.createObjectURL(file);
+    } else {
+      element.href = URL.createObjectURL(content);
     }
     
+    element.download = filename;
     window.document.body.appendChild(element);
     element.click();
     window.document.body.removeChild(element);
@@ -596,6 +638,23 @@ The computer was operating properly and the accuracy of the information is not d
                         </dd>
                       </div>
                     )}
+                    {structuredContent?.legalReferences && structuredContent.legalReferences.length > 0 && (
+                      <div className="col-span-2">
+                        <dt className="text-sm font-medium text-gray-500 flex items-center">
+                          <BookOpen className="h-4 w-4 mr-1.5 text-gray-400" />
+                          Legal References
+                        </dt>
+                        <dd className="mt-1 text-sm text-gray-900">
+                          <div className="flex flex-wrap gap-1">
+                            {structuredContent.legalReferences.map((reference, index) => (
+                              <Badge key={index} variant="outline" className="bg-purple-50">
+                                {reference}
+                              </Badge>
+                            ))}
+                          </div>
+                        </dd>
+                      </div>
+                    )}
                   </>
                 )}
               </dl>
@@ -606,10 +665,138 @@ The computer was operating properly and the accuracy of the information is not d
             <div className="border rounded-md p-4 h-80 overflow-auto">
               {extractedText ? (
                 <div className="flex flex-col h-full">
-                  <pre className="text-sm whitespace-pre-wrap font-sans flex-grow">
-                    {extractedText}
+                  <div className="mb-4 flex justify-between items-center border-b pb-3">
+                    <div className="text-sm font-semibold text-gray-700 flex items-center">
+                      <FileText className="h-4 w-4 mr-2" /> 
+                      Extracted Text Format:
+                    </div>
+                    <div className="flex space-x-2">
+                      <Button 
+                        variant={formatType === 'plain' ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setFormatType('plain')}
+                      >
+                        <AlignLeft className="h-4 w-4 mr-1.5" />
+                        Plain Text
+                      </Button>
+                      <Button 
+                        variant={formatType === 'structured' ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setFormatType('structured')}
+                      >
+                        <ScrollText className="h-4 w-4 mr-1.5" />
+                        Structured
+                      </Button>
+                      <Button 
+                        variant={formatType === 'json' ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setFormatType('json')}
+                      >
+                        <Database className="h-4 w-4 mr-1.5" />
+                        JSON
+                      </Button>
+                    </div>
+                  </div>
+
+                  <pre className="text-sm whitespace-pre-wrap font-sans flex-grow overflow-auto">
+                    {formatType === 'plain' && extractedText}
+                    {formatType === 'structured' && structuredContent && ocrMetadata && (
+                      <div className="structured-text">
+                        {structuredContent.title && (
+                          <h2 className="text-lg font-bold mb-4">{structuredContent.title}</h2>
+                        )}
+                        
+                        {ocrMetadata.documentType && (
+                          <div className="mb-4">
+                            <strong>DOCUMENT TYPE:</strong> {ocrMetadata.documentType}
+                          </div>
+                        )}
+                        
+                        {ocrMetadata.dates && ocrMetadata.dates.length > 0 && (
+                          <div className="mb-4">
+                            <strong>DATE:</strong> {ocrMetadata.dates[0]}
+                          </div>
+                        )}
+                        
+                        {ocrMetadata.parties && ocrMetadata.parties.length > 0 && (
+                          <div className="mb-4">
+                            <strong>PARTIES:</strong> {ocrMetadata.parties.join(", ")}
+                          </div>
+                        )}
+                        
+                        {structuredContent.sections.map((section, idx) => (
+                          <div key={idx} className="mb-4">
+                            {section.heading && (
+                              <h3 className={`font-bold ${section.level === 1 ? 'text-md' : 'text-sm'} mb-2`}>
+                                {section.heading}
+                              </h3>
+                            )}
+                            <p>{section.content}</p>
+                          </div>
+                        ))}
+                        
+                        {structuredContent.tables && structuredContent.tables.length > 0 && (
+                          <div className="mt-4">
+                            <h4 className="font-bold">Tables Detected:</h4>
+                            <ul>
+                              {structuredContent.tables.map((table, idx) => (
+                                <li key={idx}>{table.description} at {table.location}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        
+                        {structuredContent.signatures && structuredContent.signatures.length > 0 && (
+                          <div className="mt-4">
+                            <h4 className="font-bold">Signatures:</h4>
+                            <ul>
+                              {structuredContent.signatures.map((sig, idx) => (
+                                <li key={idx}>
+                                  {sig.name && <span>{sig.name}</span>}
+                                  {sig.position && <span> ({sig.position})</span>}
+                                  {sig.date && <span> - Date: {sig.date}</span>}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        
+                        <div className="mt-6 pt-4 border-t">
+                          <strong>OCR CONFIDENCE:</strong> {Math.round(ocrMetadata.confidence * 100)}%
+                        </div>
+                      </div>
+                    )}
+                    {formatType === 'json' && structuredContent && ocrMetadata && (
+                      JSON.stringify({
+                        documentInfo: {
+                          type: ocrMetadata.documentType,
+                          confidentiality: ocrMetadata.confidentialityLevel,
+                          creationDate: ocrMetadata.creationDate,
+                          author: ocrMetadata.author,
+                          pageCount: ocrMetadata.pageCount,
+                        },
+                        parties: ocrMetadata.parties,
+                        dates: ocrMetadata.dates,
+                        keywords: ocrMetadata.keywords,
+                        legalReferences: structuredContent.legalReferences,
+                        content: structuredContent.sections.map(section => ({
+                          heading: section.heading,
+                          content: section.content,
+                          level: section.level
+                        })),
+                        ocrConfidence: ocrMetadata.confidence
+                      }, null, 2)
+                    )}
                   </pre>
                   <div className="flex justify-end pt-4 border-t mt-4">
+                    <Button 
+                      variant="outline" 
+                      className="ml-2"
+                      onClick={handleDownload}
+                    >
+                      <DownloadIcon className="h-4 w-4 mr-1.5" />
+                      Download {formatType === 'json' ? 'JSON' : formatType === 'structured' ? 'Structured Text' : 'Plain Text'}
+                    </Button>
                     <Button 
                       variant="outline" 
                       className="ml-2"
