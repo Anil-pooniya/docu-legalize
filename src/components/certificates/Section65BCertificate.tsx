@@ -28,6 +28,29 @@ const Section65BCertificate: React.FC<Section65BCertificateProps> = ({
   onDownload
 }) => {
   const certificateRef = React.useRef<HTMLDivElement>(null);
+  const [generatedHash, setGeneratedHash] = React.useState<string>(sha256Hash);
+
+  // Generate SHA256 hash from the document content
+  const generateSha256Hash = React.useCallback(async (content: string) => {
+    try {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(content);
+      const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashHex = hashArray.map(byte => byte.toString(16).padStart(2, "0")).join("");
+      setGeneratedHash(hashHex);
+    } catch (error) {
+      console.error("Error generating hash:", error);
+      // Fall back to the provided hash if there's an error
+      setGeneratedHash(sha256Hash);
+    }
+  }, [sha256Hash]);
+
+  // Generate the hash whenever the document changes
+  React.useEffect(() => {
+    const documentContent = `${documentName} ${generatedDate} ${verificationId}`;
+    generateSha256Hash(documentContent);
+  }, [documentName, generatedDate, verificationId, generateSha256Hash]);
 
   const downloadAsPDF = () => {
     if (!certificateRef.current) return;
@@ -187,7 +210,7 @@ const Section65BCertificate: React.FC<Section65BCertificateProps> = ({
           
           <div className="mt-6">
             <p className="font-semibold">SHA256 Hash:</p>
-            <p className="text-gray-600">{sha256Hash}</p>
+            <p className="text-gray-600">{generatedHash}</p>
           </div>
 
           {verificationLink && (
