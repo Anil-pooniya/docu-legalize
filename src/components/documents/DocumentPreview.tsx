@@ -44,9 +44,9 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
   const [isExtracting, setIsExtracting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [formatType, setFormatType] = useState<'plain' | 'structured'>('plain');
-  const [ocrMetadata, setOcrMetadata<OCRMetadata | null>(null);
-  const [structuredContent, setStructuredContent<StructuredContent | null>(null);
-  const [certificateData, setCertificateData<{
+  const [ocrMetadata, setOcrMetadata] = useState<OCRMetadata | null>(null);
+  const [structuredContent, setStructuredContent] = useState<StructuredContent | null>(null);
+  const [certificateData, setCertificateData] = useState<{
     id: string;
     documentName: string;
     date: string;
@@ -65,13 +65,11 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
   }, [error, toast]);
 
   useEffect(() => {
-    // Clear extracted text when document changes
     setExtractedText(null);
     setCertificateData(null);
     setOcrMetadata(null);
     setStructuredContent(null);
     
-    // If document has content already, use it
     if (documentData?.content) {
       setExtractedText(documentData.content);
     }
@@ -97,8 +95,6 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
     
     setIsExtracting(true);
     try {
-      // In a real app, we would need to fetch the actual file
-      // For now, we'll simulate with a mock file
       const mockFile = new File([""], documentData.name, { 
         type: documentData.type === "pdf" ? "application/pdf" : "image/jpeg" 
       });
@@ -106,7 +102,6 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
       const result = await ocrService.extractText(mockFile);
       setExtractedText(result.text);
       
-      // Store OCR metadata
       setOcrMetadata({
         confidence: result.confidence,
         pageCount: result.metadata.pageCount,
@@ -119,12 +114,10 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
         creationDate: result.metadata.creationDate
       });
       
-      // Store structured content
       if (result.structuredContent) {
         setStructuredContent(result.structuredContent);
       }
       
-      // Save the extracted text to the document
       if (documentData.id && result.text) {
         await ocrService.saveExtractedText(documentData.id, result.text, result.structuredContent);
       }
@@ -134,7 +127,6 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
         description: `Document text extracted with ${Math.round(result.confidence * 100)}% confidence.`,
       });
       
-      // Switch to the text content tab
       setActiveTab("textContent");
     } catch (err) {
       toast({
@@ -186,10 +178,8 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
     let filename = "";
     let content: Blob | string = "";
     
-    // In a real app, we would fetch the document file
     if (activeTab === "textContent" && extractedText) {
       if (formatType === 'structured' && ocrMetadata && structuredContent) {
-        // Create structured text output
         content = ocrService.exportAsText({
           text: extractedText,
           confidence: ocrMetadata.confidence,
@@ -198,12 +188,10 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
         });
         filename = `${documentData.name.replace(/\.[^/.]+$/, '')}_structured.txt`;
       } else {
-        // Plain text
         content = extractedText;
         filename = `${documentData.name.replace(/\.[^/.]+$/, '')}_plain.txt`;
       }
     } else if (activeTab === "certificate" && certificateData) {
-      // Get the certificate HTML and convert it to a PDF-like format
       content = `SECTION 65B CERTIFICATE
       
 Document: ${certificateData.documentName}
@@ -221,17 +209,14 @@ During said period of time, information of the kind contained in the electronic 
 The computer was operating properly and the accuracy of the information is not disputed.
       `;
       
-      // Set appropriate filename for certificate
       filename = `certificate-${certificateData.id}.txt`;
     } else {
       content = documentData?.content || `Mock content for ${documentData?.name}`;
       filename = documentData?.name || "document.txt";
     }
     
-    // Create download link
     const element = window.document.createElement("a");
     
-    // Handle different content types
     if (typeof content === 'string') {
       const file = new Blob([content], { type: 'text/plain' });
       element.href = URL.createObjectURL(file);
@@ -250,95 +235,53 @@ The computer was operating properly and the accuracy of the information is not d
     });
   };
 
-  const handleDownloadCertificateHtml = () => {
+  const handleDownloadCertificateAsPDF = () => {
     if (!certificateRef.current || !certificateData) return;
     
-    // Get the HTML content of the certificate
-    const certificateHtml = certificateRef.current.outerHTML;
-    
-    // Create a complete HTML document
-    const htmlContent = `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Section 65B Certificate - ${certificateData.documentName}</title>
-      <style>
-        body {
-          font-family: Arial, sans-serif;
-          line-height: 1.6;
-          color: #333;
-          max-width: 800px;
-          margin: 0 auto;
-          padding: 20px;
-        }
-        .certificate {
-          border: 2px solid #1e40af;
-          padding: 20px;
-          margin: 20px 0;
-          background-color: #f9fafb;
-        }
-        .certificate-header {
-          text-align: center;
-          margin-bottom: 30px;
-        }
-        .certificate-title {
-          font-size: 24px;
-          font-weight: bold;
-          color: #1e40af;
-          margin-bottom: 10px;
-        }
-        .certificate-seal {
-          display: inline-block;
-          border: 2px solid #1e40af;
-          border-radius: 50%;
-          width: 100px;
-          height: 100px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin: 0 auto;
-          color: #1e40af;
-          font-weight: bold;
-        }
-        .certificate-content {
-          margin: 20px 0;
-        }
-        .certificate-footer {
-          margin-top: 40px;
-          text-align: right;
-        }
-        .verification {
-          margin-top: 30px;
-          font-size: 14px;
-          color: #666;
-        }
-      </style>
-    </head>
-    <body>
-      ${certificateHtml}
-    </body>
-    </html>
-    `;
-    
-    // Create a Blob with the HTML content
-    const blob = new Blob([htmlContent], { type: 'text/html' });
-    
-    // Create a download link
-    const element = window.document.createElement("a");
-    element.href = URL.createObjectURL(blob);
-    element.download = `certificate-${certificateData.id}.html`;
-    
-    // Trigger download
-    window.document.body.appendChild(element);
-    element.click();
-    window.document.body.removeChild(element);
-    
-    toast({
-      title: "Certificate download started",
-      description: "Your certificate is being downloaded as HTML.",
-    });
+    try {
+      toast({
+        title: "PDF generation started",
+        description: "Your certificate PDF is being generated and will download shortly.",
+      });
+      
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4"
+      });
+      
+      doc.html(certificateRef.current, {
+        callback: function(pdf) {
+          pdf.save(`Section65B_Certificate_${certificateData.id}.pdf`);
+          
+          if (documentData) {
+            ocrService.saveCertificateToDatabase(
+              documentData.id,
+              certificateData.id,
+              `Section65B_Certificate_${certificateData.id}.pdf`
+            ).then(() => {
+              toast({
+                title: "Certificate saved",
+                description: "Your certificate has been saved to the database and will be available for future sessions.",
+              });
+            }).catch((err) => {
+              console.error("Error saving certificate:", err);
+            });
+          }
+        },
+        x: 10,
+        y: 10,
+        width: 180,
+        windowWidth: 650
+      });
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      toast({
+        title: "Error generating PDF",
+        description: "There was an error generating your PDF. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   if (isLoading) {
@@ -842,22 +785,13 @@ The computer was operating properly and the accuracy of the information is not d
                     verificationId={certificateData.id}
                   />
                 </div>
-                <div className="flex justify-end mt-4 space-x-2">
+                <div className="flex justify-end mt-4">
                   <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={handleDownload}
+                    className="bg-legal-primary hover:bg-legal-dark"
+                    onClick={handleDownloadCertificateAsPDF}
                   >
                     <DownloadIcon className="h-4 w-4 mr-1.5" />
-                    Download as Text
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={handleDownloadCertificateHtml}
-                  >
-                    <ScrollText className="h-4 w-4 mr-1.5" />
-                    Download as HTML
+                    Download as PDF
                   </Button>
                 </div>
               </div>
