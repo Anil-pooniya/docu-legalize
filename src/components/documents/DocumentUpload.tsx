@@ -1,18 +1,20 @@
 
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { UploadIcon, FileIcon, XIcon } from "lucide-react";
+import { UploadIcon, FileIcon, XIcon, FileTextIcon, ImageIcon, FileType2Icon, CheckIcon } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useUploadDocument } from "@/services/documentService";
 import { useNavigate } from "react-router-dom";
 import ocrService from "@/services/ocrService";
+import { Badge } from "@/components/ui/badge";
 
 const DocumentUpload: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [preExtractedMetadata, setPreExtractedMetadata] = useState<Record<string, any> | null>(null);
   const { toast } = useToast();
   const uploadMutation = useUploadDocument();
   const navigate = useNavigate();
@@ -34,6 +36,7 @@ const DocumentUpload: React.FC = () => {
       const uploadedFile = e.dataTransfer.files[0];
       if (validateFile(uploadedFile)) {
         setFile(uploadedFile);
+        extractPreviewMetadata(uploadedFile);
       }
     }
   };
@@ -43,18 +46,30 @@ const DocumentUpload: React.FC = () => {
       const uploadedFile = e.target.files[0];
       if (validateFile(uploadedFile)) {
         setFile(uploadedFile);
+        extractPreviewMetadata(uploadedFile);
       }
     }
   };
 
   const validateFile = (file: File): boolean => {
-    const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/tiff', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const validTypes = [
+      'application/pdf', 
+      'image/jpeg', 
+      'image/png', 
+      'image/tiff', 
+      'application/msword', 
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain',
+      'application/rtf',
+      'application/vnd.oasis.opendocument.text'
+    ];
+    
+    const maxSize = 15 * 1024 * 1024; // 15MB
     
     if (!validTypes.includes(file.type)) {
       toast({
         title: "Invalid file type",
-        description: "Please upload a PDF, JPEG, PNG, TIFF, DOC or DOCX file",
+        description: "Please upload a PDF, JPEG, PNG, TIFF, DOC, DOCX, TXT, RTF or ODT file",
         variant: "destructive",
       });
       return false;
@@ -63,7 +78,7 @@ const DocumentUpload: React.FC = () => {
     if (file.size > maxSize) {
       toast({
         title: "File too large",
-        description: "Maximum file size is 10MB",
+        description: "Maximum file size is 15MB",
         variant: "destructive",
       });
       return false;
@@ -72,60 +87,45 @@ const DocumentUpload: React.FC = () => {
     return true;
   };
 
-  const extractMetadata = async (file: File): Promise<any> => {
+  const extractPreviewMetadata = async (file: File) => {
     try {
       setIsExtracting(true);
       // Get basic file metadata
       const metadata = await ocrService.extractFileMetadata(file);
-      
-      // For PDFs and images, attempt to extract more detailed metadata
-      if (file.type.includes('pdf') || file.type.includes('image')) {
-        // Read the file to extract additional metadata
-        return new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onload = async (e) => {
-            try {
-              // If we have image or PDF data, we could extract more metadata
-              // For now, return the basic metadata with file type specific info
-              if (file.type.includes('pdf')) {
-                metadata.format = 'PDF';
-                metadata.pageCount = Math.max(1, Math.ceil(file.size / 100000)); // Estimate pages
-              } else {
-                metadata.format = file.type.split('/')[1].toUpperCase();
-                metadata.pageCount = 1;
-              }
-              
-              resolve(metadata);
-            } catch (error) {
-              console.error("Error extracting detailed metadata:", error);
-              resolve(metadata); // Return basic metadata if detailed extraction fails
-            }
-          };
-          
-          reader.onerror = () => resolve(metadata);
-          
-          // Read as array buffer for binary files like PDF
-          if (file.type.includes('pdf')) {
-            reader.readAsArrayBuffer(file);
-          } else {
-            // Read as data URL for images
-            reader.readAsDataURL(file);
-          }
-        });
-      }
-      
-      return metadata;
+      setPreExtractedMetadata(metadata);
     } catch (error) {
-      console.error("Error in metadata extraction:", error);
-      return {
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        lastModified: new Date(file.lastModified).toISOString()
-      };
+      console.error("Error extracting preview metadata:", error);
     } finally {
       setIsExtracting(false);
     }
+  };
+
+  const getFileTypeIcon = (file: File) => {
+    const type = file.type;
+    if (type.includes('pdf')) return <FileTextIcon className="h-8 w-8 text-red-500" />;
+    if (type.includes('image')) return <ImageIcon className="h-8 w-8 text-blue-500" />;
+    if (type.includes('word') || type.includes('document')) return <FileType2Icon className="h-8 w-8 text-indigo-500" />;
+    return <FileIcon className="h-8 w-8 text-gray-500" />;
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const getFileFormatFromType = (mimeType: string): string => {
+    if (mimeType.includes('pdf')) return 'PDF';
+    if (mimeType.includes('jpeg') || mimeType.includes('jpg')) return 'JPEG';
+    if (mimeType.includes('png')) return 'PNG';
+    if (mimeType.includes('tiff')) return 'TIFF';
+    if (mimeType.includes('docx')) return 'DOCX';
+    if (mimeType.includes('doc')) return 'DOC';
+    if (mimeType.includes('text/plain')) return 'TXT';
+    if (mimeType.includes('rtf')) return 'RTF';
+    return mimeType.split('/')[1]?.toUpperCase() || 'Unknown';
   };
 
   const handleUpload = async () => {
@@ -133,8 +133,13 @@ const DocumentUpload: React.FC = () => {
     
     try {
       setIsExtracting(true);
+      toast({
+        title: "Processing document",
+        description: "Extracting metadata and preparing for upload...",
+      });
+      
       // Extract metadata before uploading
-      const metadata = await extractMetadata(file);
+      const metadata = await ocrService.extractFileMetadata(file);
       
       // Create a new file object with the extracted metadata
       const fileWithMetadata = new File([file], file.name, {
@@ -147,9 +152,13 @@ const DocumentUpload: React.FC = () => {
       
       toast({
         title: "Upload successful",
-        description: "Your document has been uploaded and is being processed.",
+        description: "Your document has been uploaded and is ready for processing.",
+        variant: "default"
       });
+      
       setFile(null);
+      setPreExtractedMetadata(null);
+      
       // Navigate to the documents page after successful upload
       navigate("/documents");
     } catch (error) {
@@ -165,12 +174,16 @@ const DocumentUpload: React.FC = () => {
 
   const removeFile = () => {
     setFile(null);
+    setPreExtractedMetadata(null);
   };
 
   return (
     <Card className="w-full">
       <CardHeader>
         <CardTitle className="text-xl text-legal-primary">Upload Document</CardTitle>
+        <CardDescription>
+          Upload documents for OCR processing, metadata extraction, and legal verification
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div
@@ -186,36 +199,89 @@ const DocumentUpload: React.FC = () => {
             <>
               <UploadIcon className="h-12 w-12 mx-auto text-gray-400 mb-4" />
               <h3 className="text-lg font-medium text-gray-700 mb-1">Drag and drop your document</h3>
-              <p className="text-sm text-gray-500 mb-4">or click to browse (PDF, JPG, PNG, TIFF, DOC, DOCX)</p>
+              <p className="text-sm text-gray-500 mb-4">or click to browse</p>
+              
+              <div className="flex flex-wrap justify-center gap-2 mb-4">
+                <Badge variant="outline" className="bg-red-50">PDF</Badge>
+                <Badge variant="outline" className="bg-blue-50">JPG</Badge>
+                <Badge variant="outline" className="bg-green-50">PNG</Badge>
+                <Badge variant="outline" className="bg-yellow-50">TIFF</Badge>
+                <Badge variant="outline" className="bg-purple-50">DOC/DOCX</Badge>
+                <Badge variant="outline" className="bg-gray-50">TXT</Badge>
+                <Badge variant="outline" className="bg-orange-50">RTF</Badge>
+              </div>
+              
               <Input
                 id="file-upload"
                 type="file"
                 className="hidden"
                 onChange={handleFileChange}
-                accept=".pdf,.jpg,.jpeg,.png,.tiff,.doc,.docx"
+                accept=".pdf,.jpg,.jpeg,.png,.tiff,.doc,.docx,.txt,.rtf,.odt"
               />
               <Button variant="outline" className="border-legal-primary text-legal-primary hover:bg-legal-light">
                 Select File
               </Button>
+              
+              <p className="text-xs text-gray-500 mt-4">Maximum file size: 15MB</p>
             </>
           ) : (
-            <div className="flex items-center justify-between p-3 bg-legal-light rounded-md">
-              <div className="flex items-center">
-                <FileIcon className="h-8 w-8 text-legal-primary mr-3" />
-                <div className="text-left">
-                  <p className="font-medium text-gray-800 truncate max-w-[200px] sm:max-w-xs">{file.name}</p>
-                  <p className="text-sm text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+            <div className="flex flex-col">
+              <div className="flex items-center justify-between p-3 bg-legal-light rounded-md">
+                <div className="flex items-center">
+                  {getFileTypeIcon(file)}
+                  <div className="text-left ml-3">
+                    <p className="font-medium text-gray-800 truncate max-w-[200px] sm:max-w-xs">{file.name}</p>
+                    <p className="text-sm text-gray-500">{formatFileSize(file.size)} • {getFileFormatFromType(file.type)}</p>
+                  </div>
                 </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeFile();
+                  }}
+                  className="p-1 hover:bg-gray-200 rounded-full"
+                >
+                  <XIcon className="h-5 w-5 text-gray-500" />
+                </button>
               </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  removeFile();
-                }}
-                className="p-1 hover:bg-gray-200 rounded-full"
-              >
-                <XIcon className="h-5 w-5 text-gray-500" />
-              </button>
+              
+              {preExtractedMetadata && !isExtracting && (
+                <div className="mt-4 text-left bg-gray-50 p-4 rounded-md">
+                  <h4 className="text-sm font-semibold mb-2 flex items-center">
+                    <CheckIcon className="h-4 w-4 mr-2 text-green-500" />
+                    Document Preview Information
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    {preExtractedMetadata.format && (
+                      <div>
+                        <span className="text-gray-500">Format:</span> {preExtractedMetadata.format}
+                      </div>
+                    )}
+                    {preExtractedMetadata.pageCount && (
+                      <div>
+                        <span className="text-gray-500">Pages:</span> {preExtractedMetadata.pageCount}
+                      </div>
+                    )}
+                    {preExtractedMetadata.documentType && (
+                      <div className="col-span-2">
+                        <span className="text-gray-500">Type:</span> {preExtractedMetadata.documentType}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-3">
+                    Full metadata will be available after OCR processing
+                  </p>
+                </div>
+              )}
+              
+              {isExtracting && (
+                <div className="mt-4 text-center">
+                  <div className="inline-flex items-center px-4 py-2 bg-blue-50 text-blue-700 rounded-md">
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Analyzing document...
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -226,7 +292,19 @@ const DocumentUpload: React.FC = () => {
             disabled={!file || uploadMutation.isPending || isExtracting}
             onClick={handleUpload}
           >
-            {uploadMutation.isPending || isExtracting ? "Processing..." : "Upload Document"}
+            {uploadMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Uploading...
+              </>
+            ) : isExtracting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              "Upload Document"
+            )}
           </Button>
         </div>
       </CardContent>
