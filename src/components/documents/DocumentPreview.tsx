@@ -255,7 +255,7 @@ The computer was operating properly and the accuracy of the information is not d
           pdf.save(`Section65B_Certificate_${certificateData.id}.pdf`);
           
           if (documentData) {
-            const certificateData = {
+            const newCertificateData = {
               id: certificateData.id,
               documentId: documentData.id,
               name: `Section65B_Certificate_${certificateData.id}.pdf`,
@@ -263,7 +263,7 @@ The computer was operating properly and the accuracy of the information is not d
             };
             
             const savedCertificates = JSON.parse(localStorage.getItem('certificates') || '[]');
-            savedCertificates.push(certificateData);
+            savedCertificates.push(newCertificateData);
             localStorage.setItem('certificates', JSON.stringify(savedCertificates));
             
             toast({
