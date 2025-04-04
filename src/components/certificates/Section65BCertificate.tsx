@@ -1,8 +1,6 @@
 
 import React from "react";
 import jsPDF from "@/lib/jspdfMock"; // Use our mock implementation instead of actual jspdf
-import { FileText, Download } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
 interface Section65BCertificateProps {
   documentName: string;
@@ -51,118 +49,6 @@ const Section65BCertificate: React.FC<Section65BCertificateProps> = ({
     const documentContent = `${documentName} ${generatedDate} ${verificationId}`;
     generateSha256Hash(documentContent);
   }, [documentName, generatedDate, verificationId, generateSha256Hash]);
-
-  const downloadAsPDF = () => {
-    if (!certificateRef.current) return;
-    
-    try {
-      const doc = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4"
-      });
-      
-      // Use the mock's html method that returns a promise
-      doc.html(certificateRef.current, {
-        callback: function(pdf) {
-          pdf.save(`Section65B_Certificate_${verificationId}.pdf`);
-        },
-        x: 10,
-        y: 10,
-        width: 180,
-        windowWidth: 650
-      });
-      
-      // Call the onDownload callback if provided
-      if (onDownload) {
-        onDownload();
-      }
-    } catch (error) {
-      console.error("Error generating PDF:", error);
-    }
-  };
-
-  const downloadAsHTML = () => {
-    if (!certificateRef.current) return;
-    
-    // Get the HTML content of the certificate
-    const certificateHtml = certificateRef.current.outerHTML;
-    
-    // Create a complete HTML document
-    const htmlContent = `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Section 65B Certificate - ${documentName}</title>
-      <style>
-        body {
-          font-family: Arial, sans-serif;
-          line-height: 1.6;
-          max-width: 800px;
-          margin: 0 auto;
-          padding: 20px;
-        }
-        .certificate-container {
-          border: 1px solid #ccc;
-          padding: 24px;
-          background-color: white;
-          border-radius: 8px;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-        .certificate-header {
-          text-align: center;
-          margin-bottom: 24px;
-        }
-        .certificate-badge {
-          background: linear-gradient(135deg, #2c5282 0%, #0f52ba 100%);
-          width: 100px;
-          height: 100px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin: 16px auto;
-          color: white;
-          font-weight: bold;
-          font-size: 24px;
-        }
-        .certificate-stamp {
-          border: 2px dashed #4A69BD;
-          padding: 16px;
-          margin-top: 32px;
-          border-radius: 4px;
-        }
-        ol li {
-          margin-bottom: 12px;
-        }
-      </style>
-    </head>
-    <body>
-      ${certificateHtml}
-    </body>
-    </html>
-    `;
-    
-    // Create a Blob with the HTML content
-    const blob = new Blob([htmlContent], { type: 'text/html' });
-    
-    // Create a download link
-    const element = window.document.createElement("a");
-    element.href = URL.createObjectURL(blob);
-    element.download = `Section65B_Certificate_${verificationId}.html`;
-    
-    // Trigger download
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
-    
-    // Call the onDownload callback if provided
-    if (onDownload) {
-      onDownload();
-    }
-  };
 
   return (
     <div className="certificate-wrapper">
@@ -237,24 +123,6 @@ const Section65BCertificate: React.FC<Section65BCertificateProps> = ({
             are true to the best of my knowledge and belief and can be presented as evidence in a court of law.
           </p>
         </div>
-      </div>
-
-      <div className="flex justify-center mt-6 space-x-3">
-        <Button 
-          className="bg-legal-primary hover:bg-legal-dark" 
-          onClick={downloadAsPDF}
-        >
-          <Download className="h-4 w-4 mr-2" />
-          Download PDF
-        </Button>
-        <Button 
-          variant="outline" 
-          className="border-legal-primary text-legal-primary hover:bg-legal-light"
-          onClick={downloadAsHTML}
-        >
-          <FileText className="h-4 w-4 mr-2" />
-          Download HTML
-        </Button>
       </div>
     </div>
   );

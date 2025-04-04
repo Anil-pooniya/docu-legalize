@@ -1,14 +1,16 @@
+
 import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, DownloadIcon, PrinterIcon, CheckCircleIcon, Loader2, Save, ScrollText, FileSearch, Tag, Users, Calendar, BookOpen, Database, AlignLeft } from "lucide-react";
+import { FileText, DownloadIcon, PrinterIcon, CheckCircleIcon, Loader2, Save, ScrollText, FileSearch, Tag, Users, Calendar, BookOpen, Database, AlignLeft, Code, Info } from "lucide-react";
 import { useDocument, useGenerateCertificate, useUpdateDocumentContent } from "@/services/documentService";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/use-toast";
 import ocrService from "@/services/ocrService";
 import Section65BCertificate from "../certificates/Section65BCertificate";
+import jsPDF from "@/lib/jspdfMock";
 
 interface DocumentPreviewProps {
   documentId?: string;
@@ -24,6 +26,12 @@ interface OCRMetadata {
   confidentialityLevel?: string;
   author?: string;
   creationDate?: string;
+  fileName?: string;
+  fileSize?: number;
+  format?: string;
+  lastModified?: string;
+  totalWords?: number;
+  totalChars?: number;
 }
 
 interface StructuredContent {
@@ -33,6 +41,7 @@ interface StructuredContent {
   signatures?: { name?: string; position?: string; date?: string }[];
   legalReferences?: string[];
   definitions?: Record<string, string>;
+  keyInformation?: Record<string, string>;
 }
 
 const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) => {
@@ -44,9 +53,9 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
   const [isExtracting, setIsExtracting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [formatType, setFormatType] = useState<'plain' | 'structured'>('plain');
-  const [ocrMetadata, setOcrMetadata] = useState<OCRMetadata | null>(null);
-  const [structuredContent, setStructuredContent] = useState<StructuredContent | null>(null);
-  const [certificateData, setCertificateData] = useState<{
+  const [ocrMetadata, setOcrMetadata<OCRMetadata | null>(null);
+  const [structuredContent, setStructuredContent<StructuredContent | null>(null);
+  const [certificateData, setCertificateData<{
     id: string;
     documentName: string;
     date: string;
@@ -65,13 +74,11 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
   }, [error, toast]);
 
   useEffect(() => {
-    // Clear extracted text when document changes
     setExtractedText(null);
     setCertificateData(null);
     setOcrMetadata(null);
     setStructuredContent(null);
     
-    // If document has content already, use it
     if (documentData?.content) {
       setExtractedText(documentData.content);
     }
@@ -97,8 +104,6 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
     
     setIsExtracting(true);
     try {
-      // In a real app, we would need to fetch the actual file
-      // For now, we'll simulate with a mock file
       const mockFile = new File([""], documentData.name, { 
         type: documentData.type === "pdf" ? "application/pdf" : "image/jpeg" 
       });
@@ -106,7 +111,6 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
       const result = await ocrService.extractText(mockFile);
       setExtractedText(result.text);
       
-      // Store OCR metadata
       setOcrMetadata({
         confidence: result.confidence,
         pageCount: result.metadata.pageCount,
@@ -116,15 +120,19 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
         documentType: result.metadata.documentType,
         confidentialityLevel: result.metadata.confidentialityLevel,
         author: result.metadata.author,
-        creationDate: result.metadata.creationDate
+        creationDate: result.metadata.creationDate,
+        fileName: result.metadata.fileName,
+        fileSize: result.metadata.fileSize,
+        format: result.metadata.format,
+        lastModified: result.metadata.lastModified,
+        totalWords: result.metadata.totalWords,
+        totalChars: result.metadata.totalChars
       });
       
-      // Store structured content
       if (result.structuredContent) {
         setStructuredContent(result.structuredContent);
       }
       
-      // Save the extracted text to the document
       if (documentData.id && result.text) {
         await ocrService.saveExtractedText(documentData.id, result.text, result.structuredContent);
       }
@@ -134,7 +142,6 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
         description: `Document text extracted with ${Math.round(result.confidence * 100)}% confidence.`,
       });
       
-      // Switch to the text content tab
       setActiveTab("textContent");
     } catch (err) {
       toast({
@@ -186,24 +193,37 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
     let filename = "";
     let content: Blob | string = "";
     
-    // In a real app, we would fetch the document file
     if (activeTab === "textContent" && extractedText) {
       if (formatType === 'structured' && ocrMetadata && structuredContent) {
-        // Create structured text output
         content = ocrService.exportAsText({
           text: extractedText,
           confidence: ocrMetadata.confidence,
-          metadata: ocrMetadata,
+          metadata: ocrMetadata as any,
           structuredContent: structuredContent
         });
         filename = `${documentData.name.replace(/\.[^/.]+$/, '')}_structured.txt`;
+      } else if (formatType === 'json' && ocrMetadata && structuredContent) {
+        // Create JSON representation
+        content = ocrService.convertToJSON({
+          text: extractedText,
+          confidence: ocrMetadata.confidence,
+          metadata: ocrMetadata as any,
+          structuredContent: structuredContent
+        });
+        filename = `${documentData.name.replace(/\.[^/.]+$/, '')}_data.json`;
       } else {
-        // Plain text
         content = extractedText;
         filename = `${documentData.name.replace(/\.[^/.]+$/, '')}_plain.txt`;
       }
+    } else if (activeTab === "metadata" && ocrMetadata) {
+      content = ocrService.getMetadataAsJSON({
+        text: extractedText || '',
+        confidence: ocrMetadata.confidence,
+        metadata: ocrMetadata as any,
+        structuredContent: structuredContent || { sections: [] }
+      });
+      filename = `${documentData.name.replace(/\.[^/.]+$/, '')}_metadata.json`;
     } else if (activeTab === "certificate" && certificateData) {
-      // Get the certificate HTML and convert it to a PDF-like format
       content = `SECTION 65B CERTIFICATE
       
 Document: ${certificateData.documentName}
@@ -221,28 +241,23 @@ During said period of time, information of the kind contained in the electronic 
 The computer was operating properly and the accuracy of the information is not disputed.
       `;
       
-      // Set appropriate filename for certificate
       filename = `certificate-${certificateData.id}.txt`;
     } else {
       content = documentData?.content || `Mock content for ${documentData?.name}`;
       filename = documentData?.name || "document.txt";
     }
     
-    // Create download link
     const element = window.document.createElement("a");
     
-    // Handle different content types
     if (typeof content === 'string') {
-      const file = new Blob([content], { type: 'text/plain' });
+      const file = new Blob([content], { type: formatType === 'json' ? 'application/json' : 'text/plain' });
       element.href = URL.createObjectURL(file);
     } else {
       element.href = URL.createObjectURL(content);
     }
     
     element.download = filename;
-    window.document.body.appendChild(element);
     element.click();
-    window.document.body.removeChild(element);
     
     toast({
       title: "Download started",
@@ -250,95 +265,64 @@ The computer was operating properly and the accuracy of the information is not d
     });
   };
 
-  const handleDownloadCertificateHtml = () => {
+  const handleDownloadCertificateAsPDF = () => {
     if (!certificateRef.current || !certificateData) return;
     
-    // Get the HTML content of the certificate
-    const certificateHtml = certificateRef.current.outerHTML;
-    
-    // Create a complete HTML document
-    const htmlContent = `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Section 65B Certificate - ${certificateData.documentName}</title>
-      <style>
-        body {
-          font-family: Arial, sans-serif;
-          line-height: 1.6;
-          color: #333;
-          max-width: 800px;
-          margin: 0 auto;
-          padding: 20px;
-        }
-        .certificate {
-          border: 2px solid #1e40af;
-          padding: 20px;
-          margin: 20px 0;
-          background-color: #f9fafb;
-        }
-        .certificate-header {
-          text-align: center;
-          margin-bottom: 30px;
-        }
-        .certificate-title {
-          font-size: 24px;
-          font-weight: bold;
-          color: #1e40af;
-          margin-bottom: 10px;
-        }
-        .certificate-seal {
-          display: inline-block;
-          border: 2px solid #1e40af;
-          border-radius: 50%;
-          width: 100px;
-          height: 100px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin: 0 auto;
-          color: #1e40af;
-          font-weight: bold;
-        }
-        .certificate-content {
-          margin: 20px 0;
-        }
-        .certificate-footer {
-          margin-top: 40px;
-          text-align: right;
-        }
-        .verification {
-          margin-top: 30px;
-          font-size: 14px;
-          color: #666;
-        }
-      </style>
-    </head>
-    <body>
-      ${certificateHtml}
-    </body>
-    </html>
-    `;
-    
-    // Create a Blob with the HTML content
-    const blob = new Blob([htmlContent], { type: 'text/html' });
-    
-    // Create a download link
-    const element = window.document.createElement("a");
-    element.href = URL.createObjectURL(blob);
-    element.download = `certificate-${certificateData.id}.html`;
-    
-    // Trigger download
-    window.document.body.appendChild(element);
-    element.click();
-    window.document.body.removeChild(element);
-    
-    toast({
-      title: "Certificate download started",
-      description: "Your certificate is being downloaded as HTML.",
-    });
+    try {
+      toast({
+        title: "PDF generation started",
+        description: "Your certificate PDF is being generated and will download shortly.",
+      });
+      
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4"
+      });
+      
+      doc.html(certificateRef.current, {
+        callback: function(pdf) {
+          pdf.save(`Section65B_Certificate_${certificateData.id}.pdf`);
+          
+          if (documentData) {
+            const newCertificateData = {
+              id: certificateData.id,
+              documentId: documentData.id,
+              name: `Section65B_Certificate_${certificateData.id}.pdf`,
+              date: new Date().toISOString()
+            };
+            
+            const savedCertificates = JSON.parse(localStorage.getItem('certificates') || '[]');
+            savedCertificates.push(newCertificateData);
+            localStorage.setItem('certificates', JSON.stringify(savedCertificates));
+            
+            toast({
+              title: "Certificate saved",
+              description: "Your certificate has been saved and will be available for future sessions.",
+            });
+          }
+        },
+        x: 10,
+        y: 10,
+        width: 180,
+        windowWidth: 650
+      });
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      toast({
+        title: "Error generating PDF",
+        description: "There was an error generating your PDF. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   if (isLoading) {
@@ -512,18 +496,29 @@ The computer was operating properly and the accuracy of the information is not d
           
           <TabsContent value="metadata" className="mt-0">
             <div className="border rounded-md p-4">
+              <div className="mb-4 flex justify-between items-center border-b pb-3">
+                <div className="text-sm font-semibold text-gray-700 flex items-center">
+                  <Info className="h-4 w-4 mr-2" /> 
+                  Document Metadata
+                </div>
+                <Button variant="outline" size="sm" onClick={handleDownload}>
+                  <DownloadIcon className="h-4 w-4 mr-1.5" />
+                  Export Metadata as JSON
+                </Button>
+              </div>
+              
               <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
                 <div>
                   <dt className="text-sm font-medium text-gray-500">File Name</dt>
-                  <dd className="mt-1 text-sm text-gray-900">{documentData.name}</dd>
+                  <dd className="mt-1 text-sm text-gray-900">{ocrMetadata?.fileName || documentData.name}</dd>
                 </div>
                 <div>
-                  <dt className="text-sm font-medium text-gray-500">Upload Date</dt>
-                  <dd className="mt-1 text-sm text-gray-900">{new Date(documentData.date).toLocaleDateString()}</dd>
+                  <dt className="text-sm font-medium text-gray-500">Format</dt>
+                  <dd className="mt-1 text-sm text-gray-900">{ocrMetadata?.format || (documentData.type === 'pdf' ? 'PDF' : documentData.type)}</dd>
                 </div>
                 <div>
                   <dt className="text-sm font-medium text-gray-500">File Size</dt>
-                  <dd className="mt-1 text-sm text-gray-900">{documentData.size}</dd>
+                  <dd className="mt-1 text-sm text-gray-900">{ocrMetadata?.fileSize ? formatFileSize(ocrMetadata.fileSize) : documentData.size}</dd>
                 </div>
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Document Type</dt>
@@ -544,9 +539,30 @@ The computer was operating properly and the accuracy of the information is not d
                   </dd>
                 </div>
                 <div>
+                  <dt className="text-sm font-medium text-gray-500">Last Modified</dt>
+                  <dd className="mt-1 text-sm text-gray-900">
+                    {ocrMetadata?.lastModified ? new Date(ocrMetadata.lastModified).toLocaleDateString() : new Date(documentData.date).toLocaleDateString()}
+                  </dd>
+                </div>
+                <div>
                   <dt className="text-sm font-medium text-gray-500">Pages</dt>
                   <dd className="mt-1 text-sm text-gray-900">{ocrMetadata?.pageCount || 1}</dd>
                 </div>
+                
+                {ocrMetadata?.totalWords && (
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Word Count</dt>
+                    <dd className="mt-1 text-sm text-gray-900">{ocrMetadata.totalWords.toLocaleString()}</dd>
+                  </div>
+                )}
+                
+                {ocrMetadata?.totalChars && (
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Character Count</dt>
+                    <dd className="mt-1 text-sm text-gray-900">{ocrMetadata.totalChars.toLocaleString()}</dd>
+                  </div>
+                )}
+                
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Legal Status</dt>
                   <dd className="mt-1 text-sm text-gray-900">
@@ -557,6 +573,7 @@ The computer was operating properly and the accuracy of the information is not d
                     )}
                   </dd>
                 </div>
+                
                 {ocrMetadata && (
                   <>
                     <div>
@@ -571,6 +588,27 @@ The computer was operating properly and the accuracy of the information is not d
                         {ocrMetadata.confidentialityLevel || "Standard"}
                       </dd>
                     </div>
+                    
+                    {/* Key Information Section */}
+                    {structuredContent?.keyInformation && Object.keys(structuredContent.keyInformation).length > 0 && (
+                      <div className="col-span-2 mt-4">
+                        <dt className="text-sm font-medium text-gray-500 flex items-center border-b pb-2 mb-2">
+                          <Database className="h-4 w-4 mr-1.5 text-gray-400" />
+                          Key Information
+                        </dt>
+                        <dd className="mt-2">
+                          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+                            {Object.entries(structuredContent.keyInformation).map(([key, value], idx) => (
+                              <div key={idx} className="border-l-2 border-legal-light pl-3">
+                                <dt className="text-xs font-medium text-gray-500">{key}</dt>
+                                <dd className="text-sm text-gray-900">{value}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </dd>
+                      </div>
+                    )}
+                    
                     {ocrMetadata.dates && ocrMetadata.dates.length > 0 && (
                       <div className="col-span-2">
                         <dt className="text-sm font-medium text-gray-500 flex items-center">
@@ -681,11 +719,46 @@ The computer was operating properly and the accuracy of the information is not d
                         <ScrollText className="h-4 w-4 mr-1.5" />
                         Structured
                       </Button>
+                      <Button 
+                        variant={formatType === 'json' ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setFormatType('json')}
+                      >
+                        <Code className="h-4 w-4 mr-1.5" />
+                        JSON
+                      </Button>
                     </div>
                   </div>
 
                   <pre className="text-sm whitespace-pre-wrap font-sans flex-grow overflow-auto">
                     {formatType === 'plain' && extractedText}
+                    
+                    {formatType === 'json' && ocrMetadata && structuredContent && (
+                      JSON.stringify({
+                        document: {
+                          name: ocrMetadata.fileName,
+                          type: ocrMetadata.documentType,
+                          format: ocrMetadata.format,
+                          author: ocrMetadata.author,
+                          created: ocrMetadata.creationDate,
+                          modified: ocrMetadata.lastModified,
+                          pages: ocrMetadata.pageCount,
+                          wordCount: ocrMetadata.totalWords,
+                          characterCount: ocrMetadata.totalChars
+                        },
+                        parties: ocrMetadata.parties,
+                        dates: ocrMetadata.dates,
+                        keyInformation: structuredContent.keyInformation,
+                        content: structuredContent.sections.map(s => ({
+                          heading: s.heading,
+                          content: s.content,
+                          level: s.level
+                        })),
+                        references: structuredContent.legalReferences,
+                        ocrConfidence: Math.round(ocrMetadata.confidence * 100)
+                      }, null, 2)
+                    )}
+                    
                     {formatType === 'structured' && structuredContent && ocrMetadata && (
                       <div className="structured-text">
                         {structuredContent.title && (
@@ -707,6 +780,20 @@ The computer was operating properly and the accuracy of the information is not d
                         {ocrMetadata.parties && ocrMetadata.parties.length > 0 && (
                           <div className="mb-4">
                             <strong>PARTIES:</strong> {ocrMetadata.parties.join(", ")}
+                          </div>
+                        )}
+                        
+                        {/* Add Key Information display */}
+                        {structuredContent.keyInformation && Object.keys(structuredContent.keyInformation).length > 0 && (
+                          <div className="mb-4 p-3 bg-blue-50 rounded">
+                            <h3 className="font-bold text-sm mb-2 text-blue-700">KEY INFORMATION:</h3>
+                            <ul className="list-disc pl-5">
+                              {Object.entries(structuredContent.keyInformation).map(([key, value], idx) => (
+                                <li key={idx} className="text-sm">
+                                  <strong>{key}:</strong> {value}
+                                </li>
+                              ))}
+                            </ul>
                           </div>
                         )}
                         
@@ -760,7 +847,7 @@ The computer was operating properly and the accuracy of the information is not d
                       onClick={handleDownload}
                     >
                       <DownloadIcon className="h-4 w-4 mr-1.5" />
-                      Download {formatType === 'structured' ? 'Structured Text' : 'Plain Text'}
+                      Download {formatType === 'structured' ? 'Structured Text' : formatType === 'json' ? 'JSON Data' : 'Plain Text'}
                     </Button>
                     <Button 
                       variant="outline" 
@@ -842,22 +929,13 @@ The computer was operating properly and the accuracy of the information is not d
                     verificationId={certificateData.id}
                   />
                 </div>
-                <div className="flex justify-end mt-4 space-x-2">
+                <div className="flex justify-end mt-4">
                   <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={handleDownload}
+                    className="bg-legal-primary hover:bg-legal-dark"
+                    onClick={handleDownloadCertificateAsPDF}
                   >
                     <DownloadIcon className="h-4 w-4 mr-1.5" />
-                    Download as Text
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={handleDownloadCertificateHtml}
-                  >
-                    <ScrollText className="h-4 w-4 mr-1.5" />
-                    Download as HTML
+                    Download as PDF
                   </Button>
                 </div>
               </div>

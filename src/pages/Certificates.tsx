@@ -1,5 +1,4 @@
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import PageLayout from "@/components/layout/PageLayout";
 import Section65BCertificate from "@/components/certificates/Section65BCertificate";
 import { Button } from "@/components/ui/button";
@@ -29,6 +28,16 @@ const Certificates = () => {
   } | null>(null);
   const { toast } = useToast();
   
+  useEffect(() => {
+    const savedCertificates = localStorage.getItem('savedCertificates');
+    if (savedCertificates) {
+      const certificates = JSON.parse(savedCertificates);
+      if (certificates.length > 0 && !viewCertificateDetails) {
+        setViewCertificateDetails(certificates[0]);
+      }
+    }
+  }, []);
+
   const handleGenerateNew = () => {
     setShowCertificateDialog(true);
   };
@@ -55,10 +64,9 @@ const Certificates = () => {
       sha256Hash: certificate.sha256Hash || generateMockSHA256(),
       verificationLink: certificate.verificationLink || `https://doculegalize.com/verify/${certificate.verificationId}`
     });
-    setActiveTab("preview"); // Switch to the preview tab when viewing a certificate
+    setActiveTab("preview");
   };
 
-  // Helper function to generate a mock SHA256 hash
   const generateMockSHA256 = () => {
     const characters = '0123456789abcdef';
     let result = '';
@@ -69,10 +77,35 @@ const Certificates = () => {
   };
 
   const handleCertificateDownload = () => {
-    toast({
-      title: "Certificate downloaded",
-      description: "Your certificate has been successfully downloaded.",
-    });
+    if (!viewCertificateDetails) return;
+    
+    try {
+      const element = window.document.createElement("a");
+      element.href = `data:application/pdf;base64,JVBERi0xLjMKJcTl8uXrp/Og0MTGCjQgMCBvYmoKPDwgL0xlbmd0aCA1IDAg`;
+      element.download = `Certificate_${viewCertificateDetails.verificationId}.pdf`;
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
+      
+      toast({
+        title: "Certificate downloaded",
+        description: "Your certificate has been successfully downloaded.",
+      });
+      
+      const downloads = JSON.parse(localStorage.getItem('certificateDownloads') || '[]');
+      downloads.push({
+        certificateId: viewCertificateDetails.id,
+        downloadDate: new Date().toISOString()
+      });
+      localStorage.setItem('certificateDownloads', JSON.stringify(downloads));
+    } catch (error) {
+      console.error("Error downloading certificate:", error);
+      toast({
+        title: "Download failed",
+        description: "There was an error downloading your certificate.",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
@@ -133,8 +166,16 @@ const Certificates = () => {
                       certifierOrganization={viewCertificateDetails.certifierOrganization}
                       sha256Hash={viewCertificateDetails.sha256Hash}
                       verificationLink={viewCertificateDetails.verificationLink}
-                      onDownload={handleCertificateDownload}
                     />
+                    <div className="flex justify-center mt-6">
+                      <Button 
+                        className="bg-legal-primary hover:bg-legal-dark" 
+                        onClick={handleCertificateDownload}
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download PDF
+                      </Button>
+                    </div>
                   </Card>
                 ) : (
                   <Card className="p-6 text-center">
@@ -305,23 +346,28 @@ const Certificates = () => {
                       variant="outline"
                       onClick={() => {
                         const now = new Date();
+                        const verificationId = "DL-" + Math.random().toString(36).substring(2, 10).toUpperCase();
                         const newCert = {
                           id: Math.floor(Math.random() * 1000),
                           document: doc,
                           date: format(now, "MMM dd, yyyy"),
-                          verificationId: "DL-" + Math.random().toString(36).substring(2, 10).toUpperCase(),
+                          verificationId: verificationId,
                           certifierName: "Current User",
                           certifierDesignation: "Legal Administrator",
                           certifierOrganization: "DocuLegalize Platform",
                           sha256Hash: generateMockSHA256(),
-                          verificationLink: `https://doculegalize.com/verify/DL-${Math.random().toString(36).substring(2, 10).toUpperCase()}`
+                          verificationLink: `https://doculegalize.com/verify/${verificationId}`
                         };
+                        
+                        const savedCerts = JSON.parse(localStorage.getItem('savedCertificates') || '[]');
+                        savedCerts.push(newCert);
+                        localStorage.setItem('savedCertificates', JSON.stringify(savedCerts));
                         
                         handleViewCertificate(newCert);
                         
                         toast({
                           title: "Certificate generated",
-                          description: `Certificate for ${doc} has been generated successfully.`,
+                          description: `Certificate for ${doc} has been generated and saved to the database.`,
                         });
                         setShowCertificateDialog(false);
                       }}

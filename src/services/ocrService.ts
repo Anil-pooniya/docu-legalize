@@ -14,6 +14,12 @@ interface OCRResult {
     dates?: string[];
     documentType?: string;
     confidentialityLevel?: string;
+    format?: string;
+    fileName?: string;
+    fileSize?: number;
+    lastModified?: string;
+    totalWords?: number;
+    totalChars?: number;
   };
   structuredContent?: {
     title?: string;
@@ -33,6 +39,7 @@ interface OCRResult {
     }[];
     legalReferences?: string[];
     definitions?: Record<string, string>;
+    keyInformation?: Record<string, string>;
   };
 }
 
@@ -72,6 +79,16 @@ const ocrService = {
       // Parse the document into structured sections
       const structuredContent = parseDocumentStructure(extractedText);
       
+      // Extract key information based on document type
+      const keyInformation = extractKeyInformation(extractedText, documentType);
+      if (keyInformation && Object.keys(keyInformation).length > 0) {
+        structuredContent.keyInformation = keyInformation;
+      }
+      
+      // Calculate word and character counts
+      const wordCount = extractedText.split(/\s+/).filter(word => word.length > 0).length;
+      const charCount = extractedText.replace(/\s+/g, '').length;
+      
       // Return structured OCR result with comprehensive metadata
       return {
         text: extractedText,
@@ -84,9 +101,18 @@ const ocrService = {
           parties: parties,
           dates: dates,
           documentType: documentType,
-          confidentialityLevel: confidentialityLevel
+          confidentialityLevel: confidentialityLevel,
+          format: fileMetadata.format || getFileFormat(file.type),
+          fileName: file.name,
+          fileSize: file.size,
+          lastModified: new Date(file.lastModified).toISOString(),
+          totalWords: wordCount,
+          totalChars: charCount
         },
-        structuredContent: structuredContent
+        structuredContent: {
+          ...structuredContent,
+          keyInformation: keyInformation
+        }
       };
     } catch (error) {
       console.error("OCR processing error:", error);
@@ -143,26 +169,68 @@ const ocrService = {
   // Extract file metadata (MIME type, size, etc.)
   extractFileMetadata: async (file: File, documentId?: string): Promise<Record<string, any>> => {
     // Get basic file info
-    const metadata = {
+    const metadata: Record<string, any> = {
       name: file.name,
       type: file.type,
       size: file.size,
       lastModified: new Date(file.lastModified).toISOString()
     };
-    
-    // If document ID is provided, update document metadata
-    if (documentId) {
-      // Get the mock documents from localStorage
-      const storedDocs = localStorage.getItem('documents');
-      if (storedDocs) {
-        let docs = JSON.parse(storedDocs);
-        const docIndex = docs.findIndex((doc: any) => doc.id === documentId);
+
+    try {
+      // Extract additional metadata based on file type
+      const format = getFileFormat(file.type);
+      metadata.format = format;
+      
+      // For PDF files: In a real implementation, we could use pdf.js to extract metadata
+      // For images: We could use EXIF data extraction
+      if (file.type.includes('pdf')) {
+        // Mock PDF metadata extraction 
+        metadata.pageCount = estimatePageCount(file.size);
+        metadata.author = extractAuthorFromFilename(file.name);
+        metadata.creationDate = new Date(file.lastModified).toISOString();
+
+        // In a real implementation we would use PDF.js to extract real metadata
+        // const pdfMetadata = await getPdfMetadata(file);
+        // Object.assign(metadata, pdfMetadata);
+      } 
+      else if (file.type.includes('image')) {
+        metadata.pageCount = 1;
         
-        if (docIndex !== -1) {
-          docs[docIndex].metadata = { ...docs[docIndex].metadata, ...metadata };
-          localStorage.setItem('documents', JSON.stringify(docs));
+        // For TIFF we might have multiple pages
+        if (file.type.includes('tiff')) {
+          metadata.pageCount = Math.max(1, Math.ceil(file.size / 500000)); // Rough estimate
+        }
+        
+        // In a real implementation we would extract EXIF data
+        // const exifData = await getImageExifData(file);
+        // Object.assign(metadata, exifData);
+      }
+      else if (file.type.includes('word') || file.type.includes('officedocument.wordprocessing')) {
+        // Word document
+        metadata.pageCount = Math.max(1, Math.ceil(file.size / 30000));
+        metadata.author = extractAuthorFromFilename(file.name);
+        
+        // In a real implementation we would extract Word document metadata
+        // const wordMetadata = await getWordMetadata(file);
+        // Object.assign(metadata, wordMetadata);
+      }
+      
+      // If document ID is provided, update document metadata
+      if (documentId) {
+        // Get the mock documents from localStorage
+        const storedDocs = localStorage.getItem('documents');
+        if (storedDocs) {
+          let docs = JSON.parse(storedDocs);
+          const docIndex = docs.findIndex((doc: any) => doc.id === documentId);
+          
+          if (docIndex !== -1) {
+            docs[docIndex].metadata = { ...docs[docIndex].metadata, ...metadata };
+            localStorage.setItem('documents', JSON.stringify(docs));
+          }
         }
       }
+    } catch (error) {
+      console.error("Error extracting extended file metadata:", error);
     }
     
     return metadata;
@@ -178,6 +246,12 @@ const ocrService = {
         creationDate: result.metadata.creationDate,
         author: result.metadata.author,
         pageCount: result.metadata.pageCount,
+        fileName: result.metadata.fileName,
+        fileSize: result.metadata.fileSize,
+        lastModified: result.metadata.lastModified,
+        format: result.metadata.format,
+        totalWords: result.metadata.totalWords,
+        totalChars: result.metadata.totalChars
       },
       parties: result.metadata.parties,
       dates: result.metadata.dates,
@@ -188,6 +262,7 @@ const ocrService = {
         content: section.content,
         level: section.level
       })),
+      keyInformation: result.structuredContent?.keyInformation || {},
       ocrConfidence: result.confidence
     };
     
@@ -208,6 +283,15 @@ const ocrService = {
     textOutput += `DATE: ${result.metadata.dates && result.metadata.dates.length > 0 ? result.metadata.dates[0] : "Unknown"}\n`;
     textOutput += `PARTIES: ${result.metadata.parties ? result.metadata.parties.join(", ") : "None detected"}\n\n`;
     
+    // Add key information if available
+    if (result.structuredContent?.keyInformation && Object.keys(result.structuredContent.keyInformation).length > 0) {
+      textOutput += "KEY INFORMATION:\n";
+      for (const [key, value] of Object.entries(result.structuredContent.keyInformation)) {
+        textOutput += `${key}: ${value}\n`;
+      }
+      textOutput += "\n";
+    }
+    
     // Add sections with proper formatting
     if (result.structuredContent?.sections) {
       result.structuredContent.sections.forEach(section => {
@@ -221,16 +305,196 @@ const ocrService = {
       textOutput += result.text;
     }
     
-    // Add OCR confidence information
+    // Add document metadata at the end
     textOutput += "\n\n" + "=".repeat(40) + "\n";
+    textOutput += `FILE: ${result.metadata.fileName}\n`;
+    textOutput += `FORMAT: ${result.metadata.format}\n`;
+    textOutput += `SIZE: ${formatFileSize(result.metadata.fileSize || 0)}\n`;
+    textOutput += `AUTHOR: ${result.metadata.author || "Unknown"}\n`;
+    textOutput += `CREATED: ${formatDate(result.metadata.creationDate)}\n`;
+    textOutput += `MODIFIED: ${formatDate(result.metadata.lastModified)}\n`;
+    textOutput += `PAGES: ${result.metadata.pageCount}\n`;
+    textOutput += `WORDS: ${result.metadata.totalWords}\n`;
+    textOutput += `CHARACTERS: ${result.metadata.totalChars}\n`;
     textOutput += `OCR CONFIDENCE: ${Math.round(result.confidence * 100)}%\n`;
     textOutput += "=".repeat(40) + "\n";
     
     return new Blob([textOutput], { type: 'text/plain' });
+  },
+  
+  // Get JSON representation of the metadata
+  getMetadataAsJSON: (result: OCRResult): string => {
+    const metadataObj = {
+      fileName: result.metadata.fileName,
+      fileSize: formatFileSize(result.metadata.fileSize || 0),
+      format: result.metadata.format,
+      author: result.metadata.author,
+      creationDate: formatDate(result.metadata.creationDate),
+      lastModified: formatDate(result.metadata.lastModified),
+      pageCount: result.metadata.pageCount,
+      documentType: result.metadata.documentType,
+      confidentialityLevel: result.metadata.confidentialityLevel,
+      totalWords: result.metadata.totalWords,
+      totalChars: result.metadata.totalChars,
+      ocrConfidence: Math.round(result.confidence * 100) + "%"
+    };
+    
+    return JSON.stringify(metadataObj, null, 2);
   }
 };
 
 // Helper functions for text analysis and metadata extraction
+
+// Format file size in a human-readable way
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Format date in a human-readable way
+function formatDate(dateStr?: string): string {
+  if (!dateStr) return "Unknown";
+  try {
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      year: 'numeric', month: 'long', day: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+  } catch (e) {
+    return dateStr;
+  }
+}
+
+// Get file format based on MIME type
+function getFileFormat(mimeType: string): string {
+  if (mimeType.includes('pdf')) return 'PDF';
+  if (mimeType.includes('jpeg') || mimeType.includes('jpg')) return 'JPEG';
+  if (mimeType.includes('png')) return 'PNG';
+  if (mimeType.includes('tiff')) return 'TIFF';
+  if (mimeType.includes('word') || mimeType.includes('docx')) return 'DOCX';
+  if (mimeType.includes('doc')) return 'DOC';
+  if (mimeType.includes('text')) return 'TXT';
+  return mimeType.split('/')[1]?.toUpperCase() || 'Unknown';
+}
+
+// Try to extract author from filename
+function extractAuthorFromFilename(filename: string): string {
+  // Look for patterns like "Document_by_John_Smith.pdf" or "John_Smith-Report.pdf"
+  const byAuthorMatch = filename.match(/_by_([A-Za-z_]+)/i);
+  if (byAuthorMatch) {
+    return byAuthorMatch[1].replace(/_/g, ' ');
+  }
+  
+  const authorDashMatch = filename.match(/([A-Za-z_]+)-/i);
+  if (authorDashMatch) {
+    return authorDashMatch[1].replace(/_/g, ' ');
+  }
+  
+  return "Unknown";
+}
+
+// Extract key information based on document type
+function extractKeyInformation(text: string, documentType: string): Record<string, string> {
+  const keyInfo: Record<string, string> = {};
+  const lowerText = text.toLowerCase();
+  
+  // Common extractors for different document types
+  if (documentType.includes('Invoice') || lowerText.includes('invoice') || lowerText.includes('payment')) {
+    // Extract invoice number
+    const invoiceNumberMatch = text.match(/(?:invoice|reference|ref)(?:\s+no\.?|\s+number|\s+#|:|\s+id)?\s*[#:]?\s*([A-Z0-9][\w\-\/]{2,15})/i);
+    if (invoiceNumberMatch) {
+      keyInfo["Invoice Number"] = invoiceNumberMatch[1];
+    }
+    
+    // Extract amount/total
+    const amountMatch = text.match(/(?:total|amount|sum|payment)(?:\s+due)?(?:\s+:|\s*:|\s*=)?\s*(?:INR|USD|\$|€|£|Rs\.?)?(?:\s*)(\d{1,3}(?:[,.]\d{3})*(?:\.\d{2})?)/i);
+    if (amountMatch) {
+      keyInfo["Amount"] = amountMatch[1];
+    }
+    
+    // Extract payment terms
+    const paymentTermsMatch = text.match(/(?:payment terms|terms of payment|due|payment due)(?:\s+:|\s*:|\s*in)?\s*([0-9]+\s+days|on receipt|immediate|cod|cash on delivery)/i);
+    if (paymentTermsMatch) {
+      keyInfo["Payment Terms"] = paymentTermsMatch[1];
+    }
+  } 
+  else if (documentType.includes('Contract') || documentType.includes('Agreement') || lowerText.includes('agreement') || lowerText.includes('contract')) {
+    // Extract effective date
+    const effectiveDateMatch = text.match(/(?:effective\s+date|commencement\s+date)(?:\s*:|is)?\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/i);
+    if (effectiveDateMatch) {
+      keyInfo["Effective Date"] = effectiveDateMatch[1];
+    }
+    
+    // Extract termination/expiration date
+    const terminationDateMatch = text.match(/(?:termination\s+date|expiration\s+date|expiry\s+date|valid\s+until)(?:\s*:|is)?\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/i);
+    if (terminationDateMatch) {
+      keyInfo["Termination Date"] = terminationDateMatch[1];
+    }
+    
+    // Extract contract value if mentioned
+    const valueMatch = text.match(/(?:contract\s+value|contract\s+amount|agreement\s+value|consideration)(?:\s*:|\s+of|\s+is)?\s*(?:INR|USD|\$|€|£|Rs\.?)?(?:\s*)(\d{1,3}(?:[,.]\d{3})*(?:\.\d{2})?)/i);
+    if (valueMatch) {
+      keyInfo["Contract Value"] = valueMatch[1];
+    }
+  } 
+  else if (documentType.includes('Legal') || lowerText.includes('court') || lowerText.includes('case no') || lowerText.includes('plaintiff') || lowerText.includes('defendant')) {
+    // Extract case number
+    const caseNumberMatch = text.match(/(?:case|docket|file|proceeding)(?:\s+no\.?|\s+number|\s+#|\s+id)?\s*[#:]?\s*([A-Z0-9][\w\-\/]{2,15})/i);
+    if (caseNumberMatch) {
+      keyInfo["Case Number"] = caseNumberMatch[1];
+    }
+    
+    // Extract court name
+    const courtMatch = text.match(/(?:in\s+the|before\s+the)(?:\s+honorable)?\s+([A-Za-z\s]+court)/i);
+    if (courtMatch) {
+      keyInfo["Court"] = courtMatch[1];
+    }
+    
+    // Extract hearing date
+    const hearingDateMatch = text.match(/(?:hearing|trial|appearance)(?:\s+date)?(?:\s*:|\s+on|\s+scheduled\s+for)?\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/i);
+    if (hearingDateMatch) {
+      keyInfo["Hearing Date"] = hearingDateMatch[1];
+    }
+  } 
+  else if (documentType.includes('Property') || lowerText.includes('deed') || lowerText.includes('property')) {
+    // Extract property address
+    const propertyMatch = text.match(/(?:property|premises|land|parcel)(?:\s+located\s+at|\s+situated\s+at|\s+at|\s+:)?\s+([A-Za-z0-9\s\.,#\-]{10,70}?)(?:\.|,|\n)/i);
+    if (propertyMatch) {
+      keyInfo["Property Address"] = propertyMatch[1].trim();
+    }
+    
+    // Extract consideration amount
+    const considerationMatch = text.match(/(?:consideration|price|amount|sum)(?:\s+of|\s+:)?\s*(?:INR|USD|\$|€|£|Rs\.?)?(?:\s*)(\d{1,3}(?:[,.]\d{3})*(?:\.\d{2})?)/i);
+    if (considerationMatch) {
+      keyInfo["Consideration"] = considerationMatch[1];
+    }
+    
+    // Extract registration number
+    const registrationMatch = text.match(/(?:registration|document)(?:\s+no\.?|\s+number|\s+#)?\s*[#:]?\s*([A-Z0-9][\w\-\/]{2,15})/i);
+    if (registrationMatch) {
+      keyInfo["Registration Number"] = registrationMatch[1];
+    }
+  }
+  
+  // General information that might be relevant for any document
+  
+  // Extract subject or reference
+  const subjectMatch = text.match(/(?:subject|ref|reference|re):?\s*([A-Za-z0-9\s\.,#\-]{5,50}?)(?:\.|,|\n)/i);
+  if (subjectMatch && !keyInfo["Subject"]) {
+    keyInfo["Subject"] = subjectMatch[1].trim();
+  }
+  
+  // Extract ID numbers (PAN, Aadhar, etc.)
+  const idMatch = text.match(/(?:pan|aadhar|aadhaar|gstin|cin|llpin)(?:\s+no\.?|\s+number|\s+#|\s+:)?\s*[#:]?\s*([A-Z0-9][\w\-\/]{5,15})/i);
+  if (idMatch) {
+    const idType = idMatch[0].match(/pan|aadhar|aadhaar|gstin|cin|llpin/i)?.[0].toUpperCase() || "ID";
+    keyInfo[`${idType} Number`] = idMatch[1];
+  }
+  
+  return keyInfo;
+}
 
 // Parse document into a structured format with sections, headings, etc.
 function parseDocumentStructure(text: string) {
@@ -472,10 +736,31 @@ async function extractFileMetadata(file: File): Promise<Record<string, any>> {
       // In a real app you'd use pdf.js or another library
       metadata.pageCount = estimatePageCount(file.size);
       metadata.format = 'PDF';
+      
+      // Simulate extracting more detailed PDF metadata
+      if (file.name.includes('invoice') || file.name.includes('bill')) {
+        metadata.documentType = 'Invoice';
+      } else if (file.name.includes('contract') || file.name.includes('agreement')) {
+        metadata.documentType = 'Contract';
+        metadata.author = file.name.split('_')[0].replace(/[0-9]/g, '');
+        if (metadata.author.length < 3) metadata.author = "Unknown";
+      }
     } 
     else if (file.type.includes('image')) {
       metadata.format = file.type.split('/')[1].toUpperCase();
       metadata.pageCount = 1;
+      
+      // Simulate EXIF extraction for images
+      if (file.name.includes('scan')) {
+        metadata.documentType = 'Scanned Document';
+        metadata.creationDate = new Date(file.lastModified).toISOString();
+      }
+    }
+    else if (file.type.includes('word') || file.type.includes('docx') || file.type.includes('doc')) {
+      metadata.format = file.type.includes('docx') ? 'DOCX' : 'DOC';
+      metadata.pageCount = Math.max(1, Math.ceil(file.size / 30000)); 
+      metadata.author = file.name.split('_')[0].replace(/[0-9]/g, '');
+      if (metadata.author.length < 3) metadata.author = "Unknown";
     }
     
     return metadata;
@@ -723,6 +1008,7 @@ function fallbackExtraction(file: File): OCRResult {
   let parties: string[] = [];
   let dates: string[] = [];
   let structuredContent: any = { sections: [] };
+  let keyInformation: Record<string, string> = {};
   
   if (fileName.includes("contract") || fileName.includes("agreement")) {
     documentType = "Contract/Agreement";
@@ -771,6 +1057,99 @@ NOW THEREFORE THIS AGREEMENT WITNESSES that in consideration of the mutual coven
         }
       ],
       legalReferences: []
+    };
+    
+    keyInformation = {
+      "Effective Date": "November 15, 2023",
+      "Contract Type": "Legal Services",
+      "Contract Duration": "2 years"
+    };
+  } else if (fileName.includes("invoice") || fileName.includes("bill")) {
+    documentType = "Invoice";
+    extractedText = `INVOICE
+
+INVOICE #: INV-2023-11-15
+DATE: November 15, 2023
+DUE DATE: December 15, 2023
+
+FROM:
+ABC Services Ltd.
+123 Business Street
+Mumbai, India 400001
+GST: 27AABCA1234A1Z5
+
+TO:
+XYZ Corporation
+456 Corporate Park
+Delhi, India 110001
+GST: 07AABCX5678B1Z3
+
+DESCRIPTION                    QTY     RATE      AMOUNT
+---------------------------------------------------------------
+Legal Consultation Services     40     ₹2,500    ₹100,000
+Contract Drafting               2      ₹15,000   ₹30,000
+Document Review                 5      ₹5,000    ₹25,000
+---------------------------------------------------------------
+                                       SUBTOTAL   ₹155,000
+                                       GST (18%)  ₹27,900
+                                       TOTAL      ₹182,900
+
+PAYMENT TERMS: Net 30
+PAYMENT METHOD: Bank Transfer
+
+BANK DETAILS:
+Bank Name: State Bank of India
+Account Name: ABC Services Ltd.
+Account Number: 12345678901
+IFSC Code: SBIN0001234`;
+
+    parties = ["ABC Services Ltd.", "XYZ Corporation"];
+    dates = ["November 15, 2023", "December 15, 2023"];
+    
+    structuredContent = {
+      title: "INVOICE",
+      sections: [
+        {
+          heading: "INVOICE DETAILS",
+          content: "INVOICE #: INV-2023-11-15 DATE: November 15, 2023 DUE DATE: December 15, 2023",
+          level: 1
+        },
+        {
+          heading: "FROM",
+          content: "ABC Services Ltd. 123 Business Street Mumbai, India 400001 GST: 27AABCA1234A1Z5",
+          level: 1
+        },
+        {
+          heading: "TO",
+          content: "XYZ Corporation 456 Corporate Park Delhi, India 110001 GST: 07AABCX5678B1Z3",
+          level: 1
+        },
+        {
+          heading: "LINE ITEMS",
+          content: "DESCRIPTION QTY RATE AMOUNT --------------------------------------------------------------- Legal Consultation Services 40 ₹2,500 ₹100,000 Contract Drafting 2 ₹15,000 ₹30,000 Document Review 5 ₹5,000 ₹25,000 --------------------------------------------------------------- SUBTOTAL ₹155,000 GST (18%) ₹27,900 TOTAL ₹182,900",
+          level: 1
+        },
+        {
+          heading: "PAYMENT INFORMATION",
+          content: "PAYMENT TERMS: Net 30 PAYMENT METHOD: Bank Transfer BANK DETAILS: Bank Name: State Bank of India Account Name: ABC Services Ltd. Account Number: 12345678901 IFSC Code: SBIN0001234",
+          level: 1
+        }
+      ],
+      tables: [
+        {
+          description: "Invoice Line Items",
+          location: "Line 14"
+        }
+      ]
+    };
+    
+    keyInformation = {
+      "Invoice Number": "INV-2023-11-15",
+      "Invoice Date": "November 15, 2023",
+      "Due Date": "December 15, 2023",
+      "Total Amount": "₹182,900",
+      "Payment Terms": "Net 30",
+      "GST Number": "27AABCA1234A1Z5"
     };
   } else if (fileName.includes("property") || fileName.includes("deed")) {
     documentType = "Property Document";
@@ -940,6 +1319,10 @@ The system has identified this as a legal document requiring further analysis by
   const keywords = extractKeywords(extractedText);
   const legalReferences = extractLegalReferences(extractedText);
   
+  // Calculate word and character counts
+  const wordCount = extractedText.split(/\s+/).filter(word => word.length > 0).length;
+  const charCount = extractedText.replace(/\s+/g, '').length;
+  
   return {
     text: extractedText,
     confidence: 0.85,
@@ -951,11 +1334,18 @@ The system has identified this as a legal document requiring further analysis by
       parties: parties,
       dates: dates,
       documentType: documentType,
-      confidentialityLevel: determineConfidentiality(extractedText)
+      confidentialityLevel: determineConfidentiality(extractedText),
+      fileName: file.name,
+      fileSize: file.size,
+      lastModified: new Date(file.lastModified).toISOString(),
+      format: getFileFormat(file.type),
+      totalWords: wordCount,
+      totalChars: charCount
     },
     structuredContent: {
       ...structuredContent,
-      legalReferences: legalReferences
+      legalReferences: legalReferences,
+      keyInformation: keyInformation
     }
   };
 }
