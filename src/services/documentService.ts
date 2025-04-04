@@ -1,6 +1,8 @@
+
 import api from './api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/components/ui/use-toast';
+import { useAuth } from '@/context/AuthContext';
 
 export interface Document {
   id: string;
@@ -11,6 +13,7 @@ export interface Document {
   verified: boolean;
   content?: string;
   metadata?: Record<string, any>;
+  userId?: string; // Add userId to associate documents with users
 }
 
 // Get documents from localStorage or initialize with mock data if not found
@@ -29,6 +32,7 @@ const getInitialDocuments = (): Document[] => {
       size: "2.4 MB",
       date: "2023-11-15",
       verified: true,
+      userId: "demo-user", // Add a default userId for mock data
       content: `
         THIS AGREEMENT made this 15th day of November, 2023
         
@@ -56,6 +60,7 @@ const getInitialDocuments = (): Document[] => {
       size: "1.8 MB",
       date: "2023-11-12",
       verified: true,
+      userId: "demo-user", // Add a default userId for mock data
     },
     {
       id: "3",
@@ -64,6 +69,7 @@ const getInitialDocuments = (): Document[] => {
       size: "3.1 MB",
       date: "2023-11-08",
       verified: false,
+      userId: "demo-user", // Add a default userId for mock data
     },
     {
       id: "4",
@@ -72,6 +78,7 @@ const getInitialDocuments = (): Document[] => {
       size: "1.5 MB",
       date: "2023-11-05",
       verified: true,
+      userId: "demo-user", // Add a default userId for mock data
     },
     {
       id: "5",
@@ -80,6 +87,7 @@ const getInitialDocuments = (): Document[] => {
       size: "2.2 MB",
       date: "2023-11-01",
       verified: false,
+      userId: "demo-user", // Add a default userId for mock data
     },
   ];
   
@@ -98,35 +106,39 @@ const persistDocuments = () => {
 
 // Document service functions
 const documentService = {
-  // Get all documents
-  getAllDocuments: async (): Promise<Document[]> => {
+  // Get all documents for the current user
+  getAllDocuments: async (userId: string): Promise<Document[]> => {
     // In a real app: return api.get('/documents');
     return new Promise((resolve) => {
-      setTimeout(() => resolve(MOCK_DOCUMENTS), 500);
+      setTimeout(() => {
+        // Filter documents by userId
+        const userDocuments = MOCK_DOCUMENTS.filter(doc => doc.userId === userId);
+        resolve(userDocuments);
+      }, 500);
     });
   },
   
-  // Get a document by ID
-  getDocumentById: async (id: string): Promise<Document> => {
+  // Get a document by ID (check if it belongs to the user)
+  getDocumentById: async (id: string, userId: string): Promise<Document> => {
     // In a real app: return api.get(`/documents/${id}`);
     return new Promise((resolve, reject) => {
       setTimeout(() => {
-        const document = MOCK_DOCUMENTS.find(doc => doc.id === id);
+        const document = MOCK_DOCUMENTS.find(doc => doc.id === id && doc.userId === userId);
         if (document) {
           resolve(document);
         } else {
-          reject(new Error('Document not found'));
+          reject(new Error('Document not found or access denied'));
         }
       }, 500);
     });
   },
   
-  // Delete a document by ID
-  deleteDocument: async (id: string): Promise<void> => {
+  // Delete a document by ID (only if it belongs to the user)
+  deleteDocument: async (id: string, userId: string): Promise<void> => {
     // In a real app: return api.delete(`/documents/${id}`);
     return new Promise((resolve, reject) => {
       setTimeout(() => {
-        const docIndex = MOCK_DOCUMENTS.findIndex(doc => doc.id === id);
+        const docIndex = MOCK_DOCUMENTS.findIndex(doc => doc.id === id && doc.userId === userId);
         if (docIndex >= 0) {
           // Remove the document from the array
           MOCK_DOCUMENTS.splice(docIndex, 1);
@@ -134,14 +146,14 @@ const documentService = {
           persistDocuments();
           resolve();
         } else {
-          reject(new Error('Document not found'));
+          reject(new Error('Document not found or access denied'));
         }
       }, 500);
     });
   },
   
   // Upload a document
-  uploadDocument: async (file: File): Promise<Document> => {
+  uploadDocument: async (file: File, userId: string): Promise<Document> => {
     // In a real app, we would use FormData to upload the file
     // const formData = new FormData();
     // formData.append('file', file);
@@ -156,6 +168,7 @@ const documentService = {
           size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
           date: new Date().toISOString().split('T')[0],
           verified: false,
+          userId: userId, // Associate with the current user
           // We're making content optional in the Document interface,
           // so it's okay not to provide it here
         };
@@ -172,11 +185,11 @@ const documentService = {
   },
   
   // Verify a document
-  verifyDocument: async (id: string): Promise<Document> => {
+  verifyDocument: async (id: string, userId: string): Promise<Document> => {
     // In a real app: return api.put(`/documents/${id}/verify`, { verified: true });
     return new Promise((resolve, reject) => {
       setTimeout(() => {
-        const docIndex = MOCK_DOCUMENTS.findIndex(doc => doc.id === id);
+        const docIndex = MOCK_DOCUMENTS.findIndex(doc => doc.id === id && doc.userId === userId);
         if (docIndex >= 0) {
           const updatedDoc = { ...MOCK_DOCUMENTS[docIndex], verified: true };
           // Update the document in the array
@@ -185,18 +198,18 @@ const documentService = {
           persistDocuments();
           resolve(updatedDoc);
         } else {
-          reject(new Error('Document not found'));
+          reject(new Error('Document not found or access denied'));
         }
       }, 500);
     });
   },
   
   // Update document content
-  updateDocumentContent: async (id: string, content: string): Promise<Document> => {
+  updateDocumentContent: async (id: string, content: string, userId: string): Promise<Document> => {
     // In a real app: return api.put(`/documents/${id}/content`, { content });
     return new Promise((resolve, reject) => {
       setTimeout(() => {
-        const docIndex = MOCK_DOCUMENTS.findIndex(doc => doc.id === id);
+        const docIndex = MOCK_DOCUMENTS.findIndex(doc => doc.id === id && doc.userId === userId);
         if (docIndex >= 0) {
           const updatedDoc = { ...MOCK_DOCUMENTS[docIndex], content };
           // Update the document in the array
@@ -205,21 +218,28 @@ const documentService = {
           persistDocuments();
           resolve(updatedDoc);
         } else {
-          reject(new Error('Document not found'));
+          reject(new Error('Document not found or access denied'));
         }
       }, 500);
     });
   },
   
   // Generate a Section 65B certificate
-  generateCertificate: async (id: string): Promise<{ 
+  generateCertificate: async (id: string, userId: string): Promise<{ 
     certificateId: string;
     documentId: string;
     issueDate: string;
   }> => {
     // In a real app: return api.post(`/documents/${id}/certificate`);
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       setTimeout(() => {
+        // Check if the document belongs to the user first
+        const document = MOCK_DOCUMENTS.find(doc => doc.id === id && doc.userId === userId);
+        if (!document) {
+          reject(new Error('Document not found or access denied'));
+          return;
+        }
+
         resolve({
           certificateId: `CERT-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
           documentId: id,
@@ -230,11 +250,11 @@ const documentService = {
   },
   
   // Extract text from document
-  extractText: async (id: string): Promise<{ text: string, documentId: string }> => {
+  extractText: async (id: string, userId: string): Promise<{ text: string, documentId: string }> => {
     // In a real app: return api.get(`/documents/${id}/extract`);
     return new Promise((resolve, reject) => {
       setTimeout(() => {
-        const document = MOCK_DOCUMENTS.find(doc => doc.id === id);
+        const document = MOCK_DOCUMENTS.find(doc => doc.id === id && doc.userId === userId);
         if (document) {
           // If document has content, return it, otherwise generate generic text
           const text = document.content || `Extracted text from ${document.name}. This would normally be the result of OCR processing.`;
@@ -243,25 +263,25 @@ const documentService = {
             documentId: id
           });
         } else {
-          reject(new Error('Document not found'));
+          reject(new Error('Document not found or access denied'));
         }
       }, 1500);
     });
   },
   
   // Download document
-  downloadDocument: async (id: string): Promise<Blob> => {
+  downloadDocument: async (id: string, userId: string): Promise<Blob> => {
     // In a real app: return api.get(`/documents/${id}/download`, { responseType: 'blob' });
     return new Promise((resolve, reject) => {
       setTimeout(() => {
-        const document = MOCK_DOCUMENTS.find(doc => doc.id === id);
+        const document = MOCK_DOCUMENTS.find(doc => doc.id === id && doc.userId === userId);
         if (document) {
           // Create a sample text blob for download
           const content = document.content || `Sample content for ${document.name}`;
           const blob = new Blob([content], { type: 'text/plain' });
           resolve(blob);
         } else {
-          reject(new Error('Document not found'));
+          reject(new Error('Document not found or access denied'));
         }
       }, 800);
     });
@@ -271,34 +291,38 @@ const documentService = {
 // React Query hooks for documents
 export const useDocuments = () => {
   const { toast } = useToast();
+  const { user } = useAuth(); // Get the current user from AuthContext
   
   return useQuery({
-    queryKey: ['documents'],
-    queryFn: documentService.getAllDocuments,
-    staleTime: 60000, // example optional configuration
-    gcTime: 300000,   // example optional configuration
-    retry: 1,         // example optional configuration
+    queryKey: ['documents', user?.id],
+    queryFn: () => documentService.getAllDocuments(user?.id || ''),
+    staleTime: 60000,
+    gcTime: 300000,
+    retry: 1,
+    enabled: !!user?.id, // Only run the query if user is authenticated
   });
 };
 
 export const useDocument = (id: string) => {
   const { toast } = useToast();
+  const { user } = useAuth();
   
   return useQuery({
-    queryKey: ['document', id],
-    queryFn: () => documentService.getDocumentById(id),
-    enabled: !!id,
+    queryKey: ['document', id, user?.id],
+    queryFn: () => documentService.getDocumentById(id, user?.id || ''),
+    enabled: !!id && !!user?.id,
   });
 };
 
 export const useUploadDocument = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
   
   return useMutation({
-    mutationFn: documentService.uploadDocument,
+    mutationFn: (file: File) => documentService.uploadDocument(file, user?.id || ''),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      queryClient.invalidateQueries({ queryKey: ['documents', user?.id] });
       toast({
         title: "Document uploaded",
         description: "Your document has been successfully uploaded and is being processed.",
@@ -317,11 +341,12 @@ export const useUploadDocument = () => {
 export const useVerifyDocument = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
   
   return useMutation({
-    mutationFn: documentService.verifyDocument,
+    mutationFn: (id: string) => documentService.verifyDocument(id, user?.id || ''),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      queryClient.invalidateQueries({ queryKey: ['documents', user?.id] });
       toast({
         title: "Document verified",
         description: "The document has been verified and marked as compliant.",
@@ -339,9 +364,10 @@ export const useVerifyDocument = () => {
 
 export const useGenerateCertificate = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
   
   return useMutation({
-    mutationFn: documentService.generateCertificate,
+    mutationFn: (id: string) => documentService.generateCertificate(id, user?.id || ''),
     onSuccess: (data) => {
       toast({
         title: "Certificate generated",
@@ -361,11 +387,12 @@ export const useGenerateCertificate = () => {
 export const useExtractText = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
   
   return useMutation({
-    mutationFn: documentService.extractText,
+    mutationFn: (id: string) => documentService.extractText(id, user?.id || ''),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      queryClient.invalidateQueries({ queryKey: ['documents', user?.id] });
       toast({
         title: "Text extracted",
         description: "Document text has been successfully extracted.",
@@ -383,9 +410,10 @@ export const useExtractText = () => {
 
 export const useDownloadDocument = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
   
   return useMutation({
-    mutationFn: documentService.downloadDocument,
+    mutationFn: (id: string) => documentService.downloadDocument(id, user?.id || ''),
     onSuccess: () => {
       toast({
         title: "Download started",
@@ -405,11 +433,12 @@ export const useDownloadDocument = () => {
 export const useDeleteDocument = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
   
   return useMutation({
-    mutationFn: documentService.deleteDocument,
+    mutationFn: (id: string) => documentService.deleteDocument(id, user?.id || ''),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      queryClient.invalidateQueries({ queryKey: ['documents', user?.id] });
       toast({
         title: "Document deleted",
         description: "The document has been successfully deleted.",
@@ -428,12 +457,13 @@ export const useDeleteDocument = () => {
 export const useUpdateDocumentContent = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
   
   return useMutation({
     mutationFn: ({ id, content }: { id: string; content: string }) => 
-      documentService.updateDocumentContent(id, content),
+      documentService.updateDocumentContent(id, content, user?.id || ''),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      queryClient.invalidateQueries({ queryKey: ['documents', user?.id] });
       toast({
         title: "Document updated",
         description: "Document content has been updated successfully.",
