@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/use-toast";
 import ocrService from "@/services/ocrService";
 import Section65BCertificate from "../certificates/Section65BCertificate";
+import jsPDF from "@/lib/jspdfMock";
 
 interface DocumentPreviewProps {
   documentId?: string;
@@ -226,7 +227,6 @@ The computer was operating properly and the accuracy of the information is not d
     
     element.download = filename;
     window.document.body.appendChild(element);
-    element.click();
     window.document.body.removeChild(element);
     
     toast({
@@ -255,17 +255,20 @@ The computer was operating properly and the accuracy of the information is not d
           pdf.save(`Section65B_Certificate_${certificateData.id}.pdf`);
           
           if (documentData) {
-            ocrService.saveCertificateToDatabase(
-              documentData.id,
-              certificateData.id,
-              `Section65B_Certificate_${certificateData.id}.pdf`
-            ).then(() => {
-              toast({
-                title: "Certificate saved",
-                description: "Your certificate has been saved to the database and will be available for future sessions.",
-              });
-            }).catch((err) => {
-              console.error("Error saving certificate:", err);
+            const certificateData = {
+              id: certificateData.id,
+              documentId: documentData.id,
+              name: `Section65B_Certificate_${certificateData.id}.pdf`,
+              date: new Date().toISOString()
+            };
+            
+            const savedCertificates = JSON.parse(localStorage.getItem('certificates') || '[]');
+            savedCertificates.push(certificateData);
+            localStorage.setItem('certificates', JSON.stringify(savedCertificates));
+            
+            toast({
+              title: "Certificate saved",
+              description: "Your certificate has been saved and will be available for future sessions.",
             });
           }
         },
