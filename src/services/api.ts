@@ -1,3 +1,4 @@
+
 // This file serves as a client for our future backend API
 // In a production environment, these would connect to actual server endpoints
 
@@ -114,12 +115,21 @@ async function performOCR(file: File, options?: { enhanceImage?: boolean; langua
       console.error('OCR processing error:', error);
       throw new Error('OCR processing failed');
     }
-  } else {
-    // Mock OCR for non-image files (in a real app, we'd use appropriate libraries)
+  } else if (file.type.includes('pdf')) {
+    // For PDF files, we would normally use a PDF extraction library like pdf.js
+    // For now, let's just return a placeholder but with the actual file metadata
     const metadata = await extractLocalFileMetadata(file);
     return {
-      text: `Content extracted from ${file.name}`,
-      confidence: 0.85,
+      text: `This is a PDF file. In a production environment, we would extract text from ${file.name} using pdf.js or a server-side solution.`,
+      confidence: 0.7,
+      metadata
+    };
+  } else {
+    // For other document types
+    const metadata = await extractLocalFileMetadata(file);
+    return {
+      text: `This is a document of type ${file.type}. Text extraction would be handled by appropriate libraries in production.`,
+      confidence: 0.6,
       metadata
     };
   }

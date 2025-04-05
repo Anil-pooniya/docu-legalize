@@ -8,12 +8,14 @@ import { useUploadDocument } from "@/services/documentService";
 import { useNavigate } from "react-router-dom";
 import ocrService from "@/services/ocrService";
 import { Badge } from "@/components/ui/badge";
+import api from "@/services/api";
 
 const DocumentUpload: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [preExtractedMetadata, setPreExtractedMetadata] = useState<Record<string, any> | null>(null);
+  const [textPreview, setTextPreview] = useState<string | null>(null);
   const { toast } = useToast();
   const uploadMutation = useUploadDocument();
   const navigate = useNavigate();
@@ -91,8 +93,23 @@ const DocumentUpload: React.FC = () => {
       setIsExtracting(true);
       const metadata = await ocrService.extractFileMetadata(file);
       setPreExtractedMetadata(metadata);
+      
+      if (file.type.startsWith('image/') || file.type.includes('pdf')) {
+        const result = await api.performOCR(file);
+        setTextPreview(result.text.substring(0, 200) + (result.text.length > 200 ? '...' : ''));
+        
+        toast({
+          title: "Text extracted",
+          description: `Document preview extracted with ${Math.round(result.confidence * 100)}% confidence.`,
+        });
+      }
     } catch (error) {
       console.error("Error extracting preview metadata:", error);
+      toast({
+        title: "Extraction failed",
+        description: "Could not extract document preview",
+        variant: "destructive",
+      });
     } finally {
       setIsExtracting(false);
     }
@@ -133,26 +150,42 @@ const DocumentUpload: React.FC = () => {
       setIsExtracting(true);
       toast({
         title: "Processing document",
-        description: "Extracting metadata and preparing for upload...",
+        description: "Extracting text and metadata...",
       });
       
-      const metadata = await ocrService.extractFileMetadata(file);
+      let documentContent;
+      let ocrMetadata;
+      
+      try {
+        const ocrResult = await api.performOCR(file);
+        documentContent = ocrResult.text;
+        ocrMetadata = ocrResult.metadata;
+      } catch (error) {
+        console.error("OCR extraction error:", error);
+        documentContent = `Content of ${file.name}`;
+        ocrMetadata = await ocrService.extractFileMetadata(file);
+      }
       
       const fileWithMetadata = new File([file], file.name, {
         type: file.type,
         lastModified: file.lastModified
       });
       
-      await uploadMutation.mutateAsync(fileWithMetadata);
+      await uploadMutation.mutateAsync({
+        file: fileWithMetadata,
+        content: documentContent,
+        metadata: ocrMetadata
+      });
       
       toast({
         title: "Upload successful",
-        description: "Your document has been uploaded and is ready for processing.",
+        description: "Your document has been uploaded with extracted text.",
         variant: "default"
       });
       
       setFile(null);
       setPreExtractedMetadata(null);
+      setTextPreview(null);
       
       navigate("/documents");
     } catch (error) {
@@ -176,7 +209,7 @@ const DocumentUpload: React.FC = () => {
       <CardHeader>
         <CardTitle className="text-xl text-legal-primary">Upload Document</CardTitle>
         <CardDescription>
-          Upload documents for OCR processing, metadata extraction, and legal verification
+          Upload documents for OCR processing, metadata extraction, and text recognition
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -262,8 +295,18 @@ const DocumentUpload: React.FC = () => {
                       </div>
                     )}
                   </div>
+                  
+                  {textPreview && (
+                    <div className="mt-4">
+                      <h4 className="text-sm font-semibold mb-2">Extracted Text Preview:</h4>
+                      <div className="p-2 bg-white border rounded-md text-xs text-gray-600 max-h-32 overflow-y-auto">
+                        {textPreview}
+                      </div>
+                    </div>
+                  )}
+                  
                   <p className="text-xs text-gray-500 mt-3">
-                    Full metadata will be available after OCR processing
+                    Full text and metadata will be available after upload
                   </p>
                 </div>
               )}
@@ -272,7 +315,7 @@ const DocumentUpload: React.FC = () => {
                 <div className="mt-4 text-center">
                   <div className="inline-flex items-center px-4 py-2 bg-blue-50 text-blue-700 rounded-md">
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Analyzing document...
+                    Extracting text from document...
                   </div>
                 </div>
               )}
@@ -297,7 +340,7 @@ const DocumentUpload: React.FC = () => {
                 Processing...
               </>
             ) : (
-              "Upload Document"
+              "Upload & Extract Text"
             )}
           </Button>
         </div>
