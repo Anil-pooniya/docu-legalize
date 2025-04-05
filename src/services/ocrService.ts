@@ -1,4 +1,3 @@
-
 import api from './api';
 
 // Mock OCR service for development
@@ -19,7 +18,18 @@ interface StructuredContent {
   legalReferences?: string[];
   definitions?: Record<string, string>;
   keyInformation?: Record<string, string>;
+  clauses?: { number: string; title?: string; content: string; subclauses?: { number: string; content: string }[] }[];
 }
+
+// Common legal terms for recognition
+const LEGAL_TERMS = [
+  "hereinafter", "whereas", "witnesseth", "aforementioned", "hereto", "hereof", "hereby",
+  "hereunder", "thereto", "thereof", "thereby", "therewith", "foregoing", "pursuant to",
+  "notwithstanding", "inter alia", "mutatis mutandis", "prima facie", "bona fide", "de facto",
+  "ex parte", "pro rata", "quid pro quo", "sine qua non", "ultra vires", "vis major",
+  "force majeure", "res judicata", "sub judice", "caveat emptor", "in witness whereof",
+  "without prejudice", "indemnify", "covenant", "warrant", "termination", "jurisdiction"
+];
 
 /**
  * Extract text from a document using OCR
@@ -32,6 +42,14 @@ async function extractText(file: File): Promise<OCRResult> {
     // If we have text, try to structure it
     if (ocrResult.text) {
       const structuredContent = analyzeTextContent(ocrResult.text, file.name);
+      
+      // Enhance metadata with legal terms
+      if (!ocrResult.metadata) {
+        ocrResult.metadata = {};
+      }
+      
+      // Extract legal terms from the text
+      ocrResult.metadata.legalTerms = extractLegalTerms(ocrResult.text);
       
       // Return combined results
       return {
@@ -130,7 +148,21 @@ function exportAsText(result: OCRResult): string {
   // Add structured content if available
   if (result.structuredContent) {
     if (result.structuredContent.title) {
-      output += `TITLE: ${result.structuredContent.title}\n\n`;
+      output += `${result.structuredContent.title.toUpperCase()}\n\n`;
+    }
+    
+    // Add dates if available
+    if (result.metadata.dates && result.metadata.dates.length > 0) {
+      output += `Date: ${result.metadata.dates[0]}\n\n`;
+    }
+    
+    // Add parties if available
+    if (result.metadata.parties && result.metadata.parties.length > 0) {
+      output += `BETWEEN:\n`;
+      result.metadata.parties.forEach((party, index) => {
+        output += `${index + 1}. ${party}\n`;
+      });
+      output += '\n';
     }
     
     // Add key information if available
@@ -142,14 +174,31 @@ function exportAsText(result: OCRResult): string {
       output += '\n';
     }
     
-    // Add sections
-    output += `CONTENT:\n\n`;
-    for (const section of result.structuredContent.sections) {
-      if (section.heading) {
-        const prefix = '='.repeat(4 - (section.level || 1));
-        output += `${prefix} ${section.heading} ${prefix}\n\n`;
+    // Add clauses if available
+    if (result.structuredContent.clauses && result.structuredContent.clauses.length > 0) {
+      output += `CLAUSES:\n\n`;
+      for (const clause of result.structuredContent.clauses) {
+        output += `CLAUSE ${clause.number}: ${clause.title || ''}\n`;
+        output += `${clause.content}\n\n`;
+        
+        // Add subclauses if available
+        if (clause.subclauses && clause.subclauses.length > 0) {
+          for (const subclause of clause.subclauses) {
+            output += `${clause.number}.${subclause.number} ${subclause.content}\n`;
+          }
+          output += '\n';
+        }
       }
-      output += `${section.content}\n\n`;
+    } else {
+      // Add sections
+      output += `CONTENT:\n\n`;
+      for (const section of result.structuredContent.sections) {
+        if (section.heading) {
+          const prefix = '='.repeat(4 - (section.level || 1));
+          output += `${prefix} ${section.heading} ${prefix}\n\n`;
+        }
+        output += `${section.content}\n\n`;
+      }
     }
     
     // Add legal references if available
@@ -157,6 +206,24 @@ function exportAsText(result: OCRResult): string {
       output += `LEGAL REFERENCES:\n`;
       for (const ref of result.structuredContent.legalReferences) {
         output += `- ${ref}\n`;
+      }
+      output += '\n';
+    }
+    
+    // Add legal terms if available
+    if (result.metadata.legalTerms && result.metadata.legalTerms.length > 0) {
+      output += `LEGAL TERMS:\n`;
+      for (const term of result.metadata.legalTerms) {
+        output += `- ${term}\n`;
+      }
+      output += '\n';
+    }
+    
+    // Add signatures if available
+    if (result.structuredContent.signatures && result.structuredContent.signatures.length > 0) {
+      output += `SIGNATURES:\n`;
+      for (const sig of result.structuredContent.signatures) {
+        output += `${sig.name || 'Party'} ${sig.position ? `(${sig.position})` : ''} ${sig.date ? `Date: ${sig.date}` : ''}\n`;
       }
       output += '\n';
     }
@@ -200,7 +267,21 @@ function getMetadataAsJSON(result: OCRResult): string {
   return JSON.stringify(metadata, null, 2);
 }
 
-// Helper functions
+/**
+ * Extract legal terms from text
+ */
+function extractLegalTerms(text: string): string[] {
+  const textLower = text.toLowerCase();
+  const foundTerms: string[] = [];
+  
+  for (const term of LEGAL_TERMS) {
+    if (textLower.includes(term.toLowerCase())) {
+      foundTerms.push(term);
+    }
+  }
+  
+  return foundTerms;
+}
 
 /**
  * Analyze text content to extract structured information
@@ -213,7 +294,8 @@ function analyzeTextContent(text: string, filename: string): StructuredContent {
     signatures: [],
     legalReferences: [],
     definitions: {},
-    keyInformation: {}
+    keyInformation: {},
+    clauses: []
   };
   
   // Try to extract a title (usually the first non-empty line)
@@ -224,81 +306,210 @@ function analyzeTextContent(text: string, filename: string): StructuredContent {
     }
   }
   
-  // Basic section detection
-  let currentSection = { content: '', level: 1 };
-  let currentHeading = '';
+  // Extract clauses and sections
+  extractClausesAndSections(lines, result);
   
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
+  // Basic section detection if no clauses were found
+  if (result.clauses.length === 0) {
+    let currentSection = { content: '', level: 1 };
+    let currentHeading = '';
     
-    // Check if this line looks like a heading
-    if (line.length < 100 && 
-        (line.toUpperCase() === line || 
-         line.match(/^[A-Z0-9\s.]{3,}$/) || 
-         line.match(/^\d+\.\s+[A-Z]/) ||
-         line.match(/^[IVXLCDM]+\.\s+[A-Z]/))) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
       
-      // Save the previous section if it has content
-      if (currentSection.content.trim().length > 0) {
-        result.sections.push({
-          heading: currentHeading,
-          content: currentSection.content.trim(),
-          level: currentSection.level
+      // Check if this line looks like a heading
+      if (line.length < 100 && 
+          (line.toUpperCase() === line || 
+           line.match(/^[A-Z0-9\s.]{3,}$/) || 
+           line.match(/^\d+\.\s+[A-Z]/) ||
+           line.match(/^[IVXLCDM]+\.\s+[A-Z]/))) {
+        
+        // Save the previous section if it has content
+        if (currentSection.content.trim().length > 0) {
+          result.sections.push({
+            heading: currentHeading,
+            content: currentSection.content.trim(),
+            level: currentSection.level
+          });
+        }
+        
+        // Start a new section
+        currentHeading = line;
+        currentSection = { content: '', level: determineHeadingLevel(line) };
+        
+        // Extract key information from headings
+        extractKeyInformation(line, lines.slice(i+1, i+3).join(' '), result.keyInformation);
+        
+        continue;
+      }
+      
+      // Look for legal references
+      if (line.includes('Section') || line.includes('Article') || line.match(/\b\d+\s*U\.S\.C\.\s*§\s*\d+\b/)) {
+        const legalRef = line.length < 150 ? line : line.substring(0, 147) + '...';
+        if (!result.legalReferences.includes(legalRef)) {
+          result.legalReferences.push(legalRef);
+        }
+      }
+      
+      // Look for definitions
+      const defMatch = line.match(/^["']?([A-Za-z\s]+)["']?\s+means\s+(.+)$/i);
+      if (defMatch) {
+        result.definitions[defMatch[1].trim()] = defMatch[2].trim();
+      }
+      
+      // Look for signatures
+      if (line.toLowerCase().includes('signature') || 
+          line.toLowerCase().includes('signed by') ||
+          line.match(/^[Xx][\s_]{10,}$/)) {
+        result.signatures.push({
+          name: extractNameFromContext(lines.slice(Math.max(0, i-2), i+3).join(' ')),
+          position: extractPositionFromContext(lines.slice(Math.max(0, i-2), i+3).join(' ')),
+          date: extractDateFromContext(lines.slice(Math.max(0, i-2), i+3).join(' '))
         });
       }
       
-      // Start a new section
-      currentHeading = line;
-      currentSection = { content: '', level: determineHeadingLevel(line) };
-      
-      // Extract key information from headings
-      extractKeyInformation(line, lines.slice(i+1, i+3).join(' '), result.keyInformation);
-      
-      continue;
+      // Add to current section content
+      currentSection.content += line + '\n';
     }
     
-    // Look for legal references
-    if (line.includes('Section') || line.includes('Article') || line.match(/\b\d+\s*U\.S\.C\.\s*§\s*\d+\b/)) {
-      const legalRef = line.length < 150 ? line : line.substring(0, 147) + '...';
-      if (!result.legalReferences.includes(legalRef)) {
-        result.legalReferences.push(legalRef);
-      }
-    }
-    
-    // Look for definitions
-    const defMatch = line.match(/^["']?([A-Za-z\s]+)["']?\s+means\s+(.+)$/i);
-    if (defMatch) {
-      result.definitions[defMatch[1].trim()] = defMatch[2].trim();
-    }
-    
-    // Look for signatures
-    if (line.toLowerCase().includes('signature') || 
-        line.toLowerCase().includes('signed by') ||
-        line.match(/^[Xx][\s_]{10,}$/)) {
-      result.signatures.push({
-        name: extractNameFromContext(lines.slice(Math.max(0, i-2), i+3).join(' ')),
-        position: extractPositionFromContext(lines.slice(Math.max(0, i-2), i+3).join(' ')),
-        date: extractDateFromContext(lines.slice(Math.max(0, i-2), i+3).join(' '))
+    // Add the last section
+    if (currentSection.content.trim().length > 0) {
+      result.sections.push({
+        heading: currentHeading,
+        content: currentSection.content.trim(),
+        level: currentSection.level
       });
     }
-    
-    // Add to current section content
-    currentSection.content += line + '\n';
-  }
-  
-  // Add the last section
-  if (currentSection.content.trim().length > 0) {
-    result.sections.push({
-      heading: currentHeading,
-      content: currentSection.content.trim(),
-      level: currentSection.level
-    });
   }
   
   // Extract document-wide key information
   extractDocumentKeyInformation(text, filename, result.keyInformation);
   
   return result;
+}
+
+/**
+ * Extract clauses and sections from text
+ */
+function extractClausesAndSections(lines: string[], result: StructuredContent): void {
+  let currentClause: { number: string; title?: string; content: string; subclauses?: { number: string; content: string }[] } | null = null;
+  let inClauseSection = false;
+  let currentText = '';
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    
+    // Skip empty lines
+    if (!line) continue;
+    
+    // Look for main clause patterns
+    const clauseMatch = line.match(/^(?:CLAUSE|Article|Section)\s+(\d+|[IVXLCDM]+)(?:[\.\:])?\s*(.*)$/i);
+    
+    if (clauseMatch) {
+      // Save previous clause if exists
+      if (currentClause) {
+        result.clauses.push(currentClause);
+      }
+      
+      // Start new clause
+      const clauseNumber = clauseMatch[1];
+      let clauseTitle = clauseMatch[2] ? clauseMatch[2].trim() : '';
+      
+      // If the title is in the next line
+      if (!clauseTitle && i + 1 < lines.length && !lines[i + 1].match(/^\d/)) {
+        clauseTitle = lines[i + 1].trim();
+        i++; // Skip the title line
+      }
+      
+      currentClause = {
+        number: clauseNumber,
+        title: clauseTitle || undefined,
+        content: '',
+        subclauses: []
+      };
+      
+      inClauseSection = true;
+      currentText = '';
+      continue;
+    }
+    
+    // Look for subclause patterns when in a clause
+    if (inClauseSection && currentClause) {
+      const subclauseMatch = line.match(/^(\d+\.\d+|\([a-z]\)|\d+\)[a-z]?)\s+(.+)$/i);
+      
+      if (subclauseMatch) {
+        // If we have accumulated text for the main clause, add it
+        if (currentText.trim() && !currentClause.content) {
+          currentClause.content = currentText.trim();
+          currentText = '';
+        }
+        
+        // Add subclause
+        if (!currentClause.subclauses) {
+          currentClause.subclauses = [];
+        }
+        
+        currentClause.subclauses.push({
+          number: subclauseMatch[1],
+          content: subclauseMatch[2]
+        });
+        continue;
+      }
+    }
+    
+    // If we're in a clause section, add to current text
+    if (inClauseSection && currentClause) {
+      currentText += line + '\n';
+    } else {
+      // For non-clause sections, check if it looks like a section heading
+      const isSectionHeading = (
+        line.length < 100 && 
+        (line.toUpperCase() === line || 
+         line.match(/^[A-Z0-9\s.]{3,}$/) || 
+         line.match(/^[IVXLCDM]+\.\s+[A-Z]/))
+      );
+      
+      if (isSectionHeading) {
+        // Add a new section
+        let sectionContent = '';
+        let j = i + 1;
+        
+        // Collect content until next section heading
+        while (j < lines.length) {
+          const nextLine = lines[j].trim();
+          const isNextSectionHeading = (
+            nextLine.length < 100 && 
+            (nextLine.toUpperCase() === nextLine || 
+             nextLine.match(/^[A-Z0-9\s.]{3,}$/) || 
+             nextLine.match(/^[IVXLCDM]+\.\s+[A-Z]/))
+          );
+          
+          if (isNextSectionHeading) {
+            break;
+          }
+          
+          sectionContent += nextLine + '\n';
+          j++;
+        }
+        
+        result.sections.push({
+          heading: line,
+          content: sectionContent.trim(),
+          level: determineHeadingLevel(line)
+        });
+        
+        i = j - 1; // Adjust loop index
+      }
+    }
+  }
+  
+  // Add the last clause if exists
+  if (currentClause) {
+    if (currentText.trim() && !currentClause.content) {
+      currentClause.content = currentText.trim();
+    }
+    result.clauses.push(currentClause);
+  }
 }
 
 /**

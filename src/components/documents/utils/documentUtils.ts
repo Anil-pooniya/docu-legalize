@@ -17,7 +17,29 @@ export const createMockFile = (name: string, type: string): File => {
     // Create a more realistic PDF mock with some content
     const pdfPlaceholderText = `Lorem ipsum dolor sit amet, consectetur adipiscing elit.
       Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
-      Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.`;
+      Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.
+      
+      WHEREAS, the parties hereto wish to enter into this Agreement;
+      
+      NOW, THEREFORE, in consideration of the premises and the mutual covenants contained herein,
+      the parties hereto agree as follows:
+      
+      CLAUSE 1: DEFINITIONS
+      As used hereinafter in this Agreement, the following terms shall have the meanings set forth below:
+      
+      1.1 "Agreement" means this agreement, including all annexes, schedules, and exhibits.
+      1.2 "Effective Date" means the date on which this Agreement becomes effective.
+      
+      CLAUSE 2: TERM
+      This Agreement shall commence on the Effective Date and shall continue for a period of
+      five (5) years unless terminated earlier pursuant to the provisions of this Agreement.
+      
+      IN WITNESS WHEREOF, the parties have executed this Agreement as of the date first above written.
+      
+      SIGNED BY:
+      John Smith
+      CEO
+      Date: April 5, 2025`;
     
     const pdfBlob = new Blob([pdfPlaceholderText], { type: 'application/pdf' });
     return new File([pdfBlob], name, { type: 'application/pdf' });

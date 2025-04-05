@@ -15,6 +15,7 @@ export interface OCRMetadata {
   lastModified?: string;
   totalWords?: number;
   totalChars?: number;
+  legalTerms?: string[]; // Added for legal term recognition
 }
 
 export interface StructuredContent {
@@ -25,6 +26,7 @@ export interface StructuredContent {
   legalReferences?: string[];
   definitions?: Record<string, string>;
   keyInformation?: Record<string, string>;
+  clauses?: { number: string; title?: string; content: string; subclauses?: { number: string; content: string }[] }[]; // Added for better clause structure
 }
 
 export interface DocumentPreviewProps {
