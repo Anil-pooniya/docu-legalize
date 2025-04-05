@@ -166,16 +166,7 @@ const DocumentUpload: React.FC = () => {
         ocrMetadata = await ocrService.extractFileMetadata(file);
       }
       
-      const fileWithMetadata = new File([file], file.name, {
-        type: file.type,
-        lastModified: file.lastModified
-      });
-      
-      await uploadMutation.mutateAsync({
-        file: fileWithMetadata,
-        content: documentContent,
-        metadata: ocrMetadata
-      });
+      await uploadMutation.mutateAsync(file);
       
       toast({
         title: "Upload successful",
