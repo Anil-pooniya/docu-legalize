@@ -1,4 +1,3 @@
-
 // This file serves as a client for our future backend API
 // In a production environment, these would connect to actual server endpoints
 
@@ -88,8 +87,7 @@ async function performOCR(file: File, options?: { enhanceImage?: boolean; langua
       // Create a worker with the proper options format
       const worker = await Tesseract.createWorker({
         logger: m => console.log(m),
-        langPath: 'https://tessdata.projectnaptha.com/4.0.0',
-        langs: ['eng'],
+        langPath: 'https://tessdata.projectnaptha.com/4.0.0'
       });
       
       // Load the English language data
