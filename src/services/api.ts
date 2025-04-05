@@ -85,7 +85,16 @@ async function performOCR(file: File, options?: { enhanceImage?: boolean; langua
   if (file.type.startsWith('image/')) {
     try {
       const Tesseract = await import('tesseract.js');
-      const worker = await Tesseract.createWorker('eng');
+      // Create a worker with the proper options format
+      const worker = await Tesseract.createWorker({
+        logger: m => console.log(m),
+        langPath: 'https://tessdata.projectnaptha.com/4.0.0',
+        langs: ['eng'],
+      });
+      
+      // Load the English language data
+      await worker.loadLanguage('eng');
+      await worker.initialize('eng');
       
       // Create a URL for the file
       const imageUrl = URL.createObjectURL(file);
