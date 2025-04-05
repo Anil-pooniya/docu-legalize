@@ -2,6 +2,8 @@
 // This file serves as a client for our future backend API
 // In a production environment, these would connect to actual server endpoints
 
+import * as pdfjsLib from 'pdfjs-dist';
+
 /**
  * Base API configuration
  */
@@ -79,10 +81,51 @@ async function extractMetadata(file: File) {
  */
 async function performOCR(file: File, options?: { enhanceImage?: boolean; language?: string }) {
   // In a real implementation, this would call a server endpoint
-  // For now, we'll use Tesseract.js for client-side OCR if it's an image
   
+  // Check if the file is a PDF
+  if (file.type.includes('pdf')) {
+    try {
+      // Set up the worker source for PDF.js
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+      
+      // Convert file to ArrayBuffer for PDF.js
+      const arrayBuffer = await file.arrayBuffer();
+      
+      // Load the PDF document
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      
+      // Initialize variables for text extraction
+      let extractedText = '';
+      const numPages = pdf.numPages;
+      
+      // Process each page
+      for (let i = 1; i <= numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          .map((item: any) => item.str)
+          .join(' ');
+        
+        extractedText += `\n--- Page ${i} ---\n${pageText}\n`;
+      }
+      
+      // Get metadata for the PDF
+      const metadata = await extractLocalFileMetadata(file);
+      metadata.pageCount = numPages;
+      
+      return {
+        text: extractedText.trim(),
+        confidence: 0.95, // PDF text extraction is highly reliable
+        words: extractedText.split(/\s+/).length,
+        metadata: metadata
+      };
+    } catch (error) {
+      console.error('PDF processing error:', error);
+      throw new Error('PDF text extraction failed');
+    }
+  }
   // Check if the file is an image
-  if (file.type.startsWith('image/')) {
+  else if (file.type.startsWith('image/')) {
     try {
       const Tesseract = await import('tesseract.js');
       // Create a worker with the proper options format
@@ -115,15 +158,6 @@ async function performOCR(file: File, options?: { enhanceImage?: boolean; langua
       console.error('OCR processing error:', error);
       throw new Error('OCR processing failed');
     }
-  } else if (file.type.includes('pdf')) {
-    // For PDF files, we would normally use a PDF extraction library like pdf.js
-    // For now, let's just return a placeholder but with the actual file metadata
-    const metadata = await extractLocalFileMetadata(file);
-    return {
-      text: `This is a PDF file. In a production environment, we would extract text from ${file.name} using pdf.js or a server-side solution.`,
-      confidence: 0.7,
-      metadata
-    };
   } else {
     // For other document types
     const metadata = await extractLocalFileMetadata(file);
