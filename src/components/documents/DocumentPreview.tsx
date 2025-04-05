@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -104,10 +103,30 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
     
     setIsExtracting(true);
     try {
-      const mockFile = new File([""], documentData.name, { 
-        type: documentData.type === "pdf" ? "application/pdf" : "image/jpeg" 
-      });
+      // For the document preview, we can't use a real PDF file due to browser security.
+      // Instead of creating an empty mock file which would cause PDF.js to fail,
+      // we'll create a more realistic representation based on documentData
       
+      // Create mock file with actual content
+      let mockFile: File;
+      
+      if (documentData.type === "pdf") {
+        // In a real app, we'd have the actual file or a blob representation.
+        // For this demo, we'll create a more realistic mock by using some placeholder text
+        const pdfPlaceholderText = `Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+          Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+          Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.`;
+        
+        const pdfBlob = new Blob([pdfPlaceholderText], { type: 'application/pdf' });
+        mockFile = new File([pdfBlob], documentData.name, { type: 'application/pdf' });
+      } else {
+        // For non-PDF files, use empty file as before
+        mockFile = new File([""], documentData.name, { 
+          type: documentData.type === "pdf" ? "application/pdf" : "image/jpeg" 
+        });
+      }
+      
+      // Proceed with extraction
       const result = await ocrService.extractText(mockFile);
       setExtractedText(result.text);
       

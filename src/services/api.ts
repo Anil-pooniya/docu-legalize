@@ -1,4 +1,3 @@
-
 // This file serves as a client for our future backend API
 // In a production environment, these would connect to actual server endpoints
 
@@ -85,6 +84,17 @@ async function performOCR(file: File, options?: { enhanceImage?: boolean; langua
   // Check if the file is a PDF
   if (file.type.includes('pdf')) {
     try {
+      // Handle empty files or invalid files
+      if (file.size === 0) {
+        const metadata = await extractLocalFileMetadata(file);
+        return {
+          text: "Unable to extract text: The PDF file appears to be empty.",
+          confidence: 0,
+          words: 0,
+          metadata
+        };
+      }
+      
       // Set up the worker source for PDF.js
       pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
       
@@ -114,14 +124,22 @@ async function performOCR(file: File, options?: { enhanceImage?: boolean; langua
       metadata.pageCount = numPages;
       
       return {
-        text: extractedText.trim(),
-        confidence: 0.95, // PDF text extraction is highly reliable
+        text: extractedText.trim() || "No text content found in this PDF.",
+        confidence: extractedText.trim() ? 0.95 : 0.5, // PDF text extraction is highly reliable when text exists
         words: extractedText.split(/\s+/).length,
         metadata: metadata
       };
     } catch (error) {
       console.error('PDF processing error:', error);
-      throw new Error('PDF text extraction failed');
+      
+      // Provide a fallback with meaningful error feedback
+      const metadata = await extractLocalFileMetadata(file);
+      return {
+        text: `Unable to extract text: ${error instanceof Error ? error.message : "An unknown error occurred"}. This may be due to the PDF being password-protected, corrupted, or containing only scanned images without OCR.`,
+        confidence: 0,
+        words: 0,
+        metadata
+      };
     }
   }
   // Check if the file is an image
