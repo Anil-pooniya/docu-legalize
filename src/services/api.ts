@@ -52,56 +52,138 @@ async function uploadFile(file: File, metadata?: Record<string, any>) {
     formData.append('metadata', JSON.stringify(metadata));
   }
   
-  return fetch(`${API_URL}/upload`, {
-    method: 'POST',
-    body: formData,
-    // Don't set Content-Type header as the browser will set it with boundary parameter
-  }).then(response => {
-    if (!response.ok) {
-      throw new Error(`Upload failed: ${response.status}`);
-    }
-    return response.json();
-  });
+  // For now, we'll extract file metadata client-side
+  // In a production environment, this would be sent to the server
+  return extractLocalFileMetadata(file)
+    .then(extractedMetadata => {
+      return {
+        id: generateUniqueId(),
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        uploadDate: new Date().toISOString(),
+        metadata: extractedMetadata
+      };
+    });
 }
 
 /**
  * Extract metadata from a document
  */
 async function extractMetadata(file: File) {
-  const formData = new FormData();
-  formData.append('file', file);
-  
-  return fetch(`${API_URL}/extract-metadata`, {
-    method: 'POST',
-    body: formData,
-  }).then(response => {
-    if (!response.ok) {
-      throw new Error(`Metadata extraction failed: ${response.status}`);
-    }
-    return response.json();
-  });
+  return extractLocalFileMetadata(file);
 }
 
 /**
  * Perform OCR on a document
  */
 async function performOCR(file: File, options?: { enhanceImage?: boolean; language?: string }) {
-  const formData = new FormData();
-  formData.append('file', file);
+  // In a real implementation, this would call a server endpoint
+  // For now, we'll use Tesseract.js for client-side OCR if it's an image
   
-  if (options) {
-    formData.append('options', JSON.stringify(options));
-  }
-  
-  return fetch(`${API_URL}/ocr`, {
-    method: 'POST',
-    body: formData,
-  }).then(response => {
-    if (!response.ok) {
-      throw new Error(`OCR processing failed: ${response.status}`);
+  // Check if the file is an image
+  if (file.type.startsWith('image/')) {
+    try {
+      const Tesseract = await import('tesseract.js');
+      const worker = await Tesseract.createWorker('eng');
+      
+      // Create a URL for the file
+      const imageUrl = URL.createObjectURL(file);
+      
+      // Recognize text
+      const result = await worker.recognize(imageUrl);
+      
+      // Clean up
+      URL.revokeObjectURL(imageUrl);
+      await worker.terminate();
+      
+      return {
+        text: result.data.text,
+        confidence: result.data.confidence / 100,
+        words: result.data.words,
+        metadata: await extractLocalFileMetadata(file)
+      };
+    } catch (error) {
+      console.error('OCR processing error:', error);
+      throw new Error('OCR processing failed');
     }
-    return response.json();
+  } else {
+    // Mock OCR for non-image files (in a real app, we'd use appropriate libraries)
+    const metadata = await extractLocalFileMetadata(file);
+    return {
+      text: `Content extracted from ${file.name}`,
+      confidence: 0.85,
+      metadata
+    };
+  }
+}
+
+/**
+ * Helper function to extract basic metadata from local files
+ */
+async function extractLocalFileMetadata(file: File) {
+  // Extract basic file metadata
+  const metadata: Record<string, any> = {
+    fileName: file.name,
+    fileType: file.type,
+    fileSize: file.size,
+    lastModified: new Date(file.lastModified).toISOString(),
+    format: getFileFormat(file.type),
+  };
+
+  // For images, extract dimensions if possible
+  if (file.type.startsWith('image/')) {
+    try {
+      const dimensions = await getImageDimensions(file);
+      metadata.width = dimensions.width;
+      metadata.height = dimensions.height;
+      metadata.dimensions = `${dimensions.width}x${dimensions.height}`;
+    } catch (error) {
+      console.error('Error extracting image dimensions:', error);
+    }
+  }
+
+  return metadata;
+}
+
+/**
+ * Helper function to get image dimensions
+ */
+function getImageDimensions(file: File): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      resolve({
+        width: img.width,
+        height: img.height
+      });
+    };
+    img.onerror = () => {
+      reject(new Error('Failed to load image'));
+    };
+    img.src = URL.createObjectURL(file);
   });
+}
+
+/**
+ * Helper function to get file format from MIME type
+ */
+function getFileFormat(mimeType: string): string {
+  if (mimeType.includes('pdf')) return 'PDF';
+  if (mimeType.includes('jpeg') || mimeType.includes('jpg')) return 'JPEG';
+  if (mimeType.includes('png')) return 'PNG';
+  if (mimeType.includes('tiff')) return 'TIFF';
+  if (mimeType.includes('docx')) return 'DOCX';
+  if (mimeType.includes('doc')) return 'DOC';
+  if (mimeType.includes('text/plain')) return 'TXT';
+  return mimeType.split('/')[1]?.toUpperCase() || 'Unknown';
+}
+
+/**
+ * Generate a unique ID
+ */
+function generateUniqueId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2);
 }
 
 export default {

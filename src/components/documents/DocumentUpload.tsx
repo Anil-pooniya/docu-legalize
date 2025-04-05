@@ -1,9 +1,8 @@
-
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { UploadIcon, FileIcon, XIcon, FileTextIcon, ImageIcon, FileType2Icon, CheckIcon } from "lucide-react";
+import { UploadIcon, FileIcon, XIcon, FileTextIcon, ImageIcon, FileType2Icon, CheckIcon, Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useUploadDocument } from "@/services/documentService";
 import { useNavigate } from "react-router-dom";
@@ -90,7 +89,6 @@ const DocumentUpload: React.FC = () => {
   const extractPreviewMetadata = async (file: File) => {
     try {
       setIsExtracting(true);
-      // Get basic file metadata
       const metadata = await ocrService.extractFileMetadata(file);
       setPreExtractedMetadata(metadata);
     } catch (error) {
@@ -138,16 +136,13 @@ const DocumentUpload: React.FC = () => {
         description: "Extracting metadata and preparing for upload...",
       });
       
-      // Extract metadata before uploading
       const metadata = await ocrService.extractFileMetadata(file);
       
-      // Create a new file object with the extracted metadata
       const fileWithMetadata = new File([file], file.name, {
         type: file.type,
         lastModified: file.lastModified
       });
       
-      // Add the metadata to the upload
       await uploadMutation.mutateAsync(fileWithMetadata);
       
       toast({
@@ -159,7 +154,6 @@ const DocumentUpload: React.FC = () => {
       setFile(null);
       setPreExtractedMetadata(null);
       
-      // Navigate to the documents page after successful upload
       navigate("/documents");
     } catch (error) {
       toast({
