@@ -287,7 +287,7 @@ const TextContentTab: React.FC<TextContentTabProps> = ({
       <div className="text-center py-8">
         {extractionError ? (
           <div className="mb-6 max-w-md mx-auto">
-            <Alert variant="warning">
+            <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
               <AlertTitle>Text Extraction Failed</AlertTitle>
               <AlertDescription>

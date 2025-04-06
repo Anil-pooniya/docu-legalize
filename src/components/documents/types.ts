@@ -18,6 +18,10 @@ export interface OCRMetadata {
   legalTerms?: string[]; // For legal term recognition
   encrypted?: boolean; // Whether the document is encrypted/password-protected
   scannedOnly?: boolean; // Whether the document contains only scanned images
+  processingErrors?: string[]; // Any errors that occurred during processing
+  recognitionQuality?: 'high' | 'medium' | 'low'; // Quality of OCR recognition
+  languageDetected?: string; // Detected language of the document
+  detectedScripts?: string[]; // Scripts (writing systems) detected in the document
 }
 
 export interface StructuredContent {
@@ -39,4 +43,18 @@ export interface CertificateData {
   id: string;
   documentName: string;
   date: string;
+}
+
+export interface ExtractedDocumentData {
+  text: string;
+  confidence: number;
+  metadata: OCRMetadata;
+  structuredContent?: StructuredContent;
+}
+
+export interface DocumentExtractionError {
+  code: string;
+  message: string;
+  details?: string;
+  possibleResolution?: string;
 }

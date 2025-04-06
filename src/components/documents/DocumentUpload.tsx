@@ -311,7 +311,7 @@ const DocumentUpload: React.FC = () => {
               </div>
               
               {uploadError && (
-                <Alert variant="warning" className="mt-4">
+                <Alert variant="destructive" className="mt-4">
                   <AlertTriangle className="h-4 w-4" />
                   <AlertTitle>Text Extraction Limited</AlertTitle>
                   <AlertDescription className="text-sm">

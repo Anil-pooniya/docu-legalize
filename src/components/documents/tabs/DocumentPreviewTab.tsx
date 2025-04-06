@@ -28,7 +28,7 @@ const DocumentPreviewTab: React.FC<DocumentPreviewTabProps> = ({
             <FileText className="h-16 w-16 mx-auto text-red-500 opacity-50 mb-4" />
             <p className="text-gray-500 text-sm">PDF document preview.</p>
             {extractionError ? (
-              <Alert variant="warning" className="mt-4 max-w-md mx-auto">
+              <Alert variant="destructive" className="mt-4 max-w-md mx-auto">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>Text Extraction Failed</AlertTitle>
                 <AlertDescription className="text-sm">
