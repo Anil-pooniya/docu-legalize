@@ -19,6 +19,9 @@ export default defineConfig(({ mode }) => ({
   },
   build: {
     outDir: "dist", // Ensure correct build output
+    rollupOptions: {
+      external: ['jspdf'], // Externalize jspdf module
+    },
   },
   base: "/docu-legalize/", // ✅ Correct GitHub Pages base path
 }));
