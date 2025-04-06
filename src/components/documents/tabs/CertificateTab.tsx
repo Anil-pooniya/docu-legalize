@@ -1,11 +1,14 @@
 
-import React from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { DownloadIcon, QrCodeIcon } from "lucide-react";
+import { DownloadIcon } from "lucide-react";
 import Section65BCertificate from "../../certificates/Section65BCertificate";
 import { CertificateData } from "../types";
 import { useIsMobile } from "@/hooks/use-mobile";
 import QRCode from "react-qr-code";
+import { useToast } from "@/components/ui/use-toast";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 interface CertificateTabProps {
   certificateData: CertificateData;
@@ -19,6 +22,67 @@ const CertificateTab: React.FC<CertificateTabProps> = ({
   onDownloadCertificateAsPDF
 }) => {
   const isMobile = useIsMobile();
+  const { toast } = useToast();
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const handleDownloadPDF = async () => {
+    if (!certificateRef.current) return;
+    
+    try {
+      setIsGenerating(true);
+      toast({
+        title: "Generating PDF",
+        description: "Please wait while we generate your certificate...",
+      });
+
+      // Create a clone of the certificate container to avoid modifying the visible one
+      const certificateContainer = certificateRef.current.cloneNode(true) as HTMLElement;
+      document.body.appendChild(certificateContainer);
+      certificateContainer.style.position = 'absolute';
+      certificateContainer.style.left = '-9999px';
+      certificateContainer.style.transform = 'none'; // Remove any scaling
+
+      // Generate the PDF
+      const canvas = await html2canvas(certificateContainer, {
+        scale: 2, // Higher scale for better quality
+        logging: false,
+        useCORS: true,
+        allowTaint: true,
+      });
+      
+      document.body.removeChild(certificateContainer);
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+      
+      // Calculate dimensions to fit the image properly on the PDF page
+      const imgWidth = 210; // A4 width in mm (210mm)
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      
+      // Save the PDF
+      pdf.save(`Certificate_${certificateData.id}.pdf`);
+      
+      setIsGenerating(false);
+      toast({
+        title: "Certificate downloaded",
+        description: "Your certificate has been successfully downloaded as a PDF.",
+      });
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      setIsGenerating(false);
+      toast({
+        title: "Download failed",
+        description: "There was an error generating your PDF. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
 
   return (
     <div>
@@ -48,10 +112,11 @@ const CertificateTab: React.FC<CertificateTabProps> = ({
       <div className="flex justify-end mt-4">
         <Button 
           className="bg-legal-primary hover:bg-legal-dark"
-          onClick={onDownloadCertificateAsPDF}
+          onClick={handleDownloadPDF}
+          disabled={isGenerating}
         >
           <DownloadIcon className="h-4 w-4 mr-1.5" />
-          Download as PDF
+          {isGenerating ? "Generating PDF..." : "Download as PDF"}
         </Button>
       </div>
     </div>
