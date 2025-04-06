@@ -1,16 +1,17 @@
-
 import React, { useState, useEffect } from "react";
 import PageLayout from "@/components/layout/PageLayout";
 import Section65BCertificate from "@/components/certificates/Section65BCertificate";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusIcon, FileTextIcon, ArrowRightIcon, FileIcon, CheckCircleIcon, ClockIcon, AlertCircleIcon, EyeIcon, Download } from "lucide-react";
+import { PlusIcon, FileTextIcon, ArrowRightIcon, FileIcon, CheckCircleIcon, ClockIcon, AlertCircleIcon, EyeIcon, Download, FileImage, Calendar } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { Badge } from "@/components/ui/badge";
-import { useGenerateCertificate, useVerifyDocument } from "@/services/documentService";
+import { useGenerateCertificate, useVerifyDocument, useDocuments } from "@/services/documentService";
 import { format } from "date-fns";
+import { Document } from "@/services/documentService";
+import QRCode from "react-qr-code";
 
 const Certificates = () => {
   const [showCertificateDialog, setShowCertificateDialog] = useState(false);
@@ -29,11 +30,11 @@ const Certificates = () => {
   } | null>(null);
   const [savedCertificates, setSavedCertificates] = useState<Array<any>>([]);
   const { toast } = useToast();
+  const { data: documents, isLoading: isLoadingDocuments } = useDocuments();
   
   useEffect(() => {
-    // Load saved certificates from localStorage
     const loadSavedCertificates = () => {
-      const savedCerts = localStorage.getItem('savedCertificates');
+      const savedCerts = localStorage.getItem('certificates') || localStorage.getItem('savedCertificates');
       if (savedCerts) {
         try {
           const certificates = JSON.parse(savedCerts);
@@ -123,9 +124,9 @@ const Certificates = () => {
 
   const saveCertificateToLocalStorage = (certificate: any) => {
     try {
-      const existingCerts = JSON.parse(localStorage.getItem('savedCertificates') || '[]');
+      const existingCerts = JSON.parse(localStorage.getItem('certificates') || '[]');
       const updatedCerts = [certificate, ...existingCerts];
-      localStorage.setItem('savedCertificates', JSON.stringify(updatedCerts));
+      localStorage.setItem('certificates', JSON.stringify(updatedCerts));
       setSavedCertificates(updatedCerts);
       
       toast({
@@ -139,6 +140,17 @@ const Certificates = () => {
         description: "There was an error saving the certificate to history.",
         variant: "destructive"
       });
+    }
+  };
+
+  const getFileIconByType = (type: string) => {
+    switch(type.toLowerCase()) {
+      case 'pdf':
+        return <FileTextIcon className="h-5 w-5 text-legal-primary mr-2" />;
+      case 'image':
+        return <FileImage className="h-5 w-5 text-legal-primary mr-2" />;
+      default:
+        return <FileIcon className="h-5 w-5 text-legal-primary mr-2" />;
     }
   };
 
@@ -191,16 +203,30 @@ const Certificates = () => {
               <TabsContent value="preview" className="mt-0">
                 {viewCertificateDetails ? (
                   <Card className="p-4">
-                    <Section65BCertificate 
-                      documentName={viewCertificateDetails.document} 
-                      generatedDate={new Date(viewCertificateDetails.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-                      verificationId={viewCertificateDetails.verificationId}
-                      certifierName={viewCertificateDetails.certifierName}
-                      certifierDesignation={viewCertificateDetails.certifierDesignation}
-                      certifierOrganization={viewCertificateDetails.certifierOrganization}
-                      sha256Hash={viewCertificateDetails.sha256Hash}
-                      verificationLink={viewCertificateDetails.verificationLink}
-                    />
+                    <div className="certificate-preview">
+                      <Section65BCertificate 
+                        documentName={viewCertificateDetails.document} 
+                        generatedDate={new Date(viewCertificateDetails.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                        verificationId={viewCertificateDetails.verificationId}
+                        certifierName={viewCertificateDetails.certifierName}
+                        certifierDesignation={viewCertificateDetails.certifierDesignation}
+                        certifierOrganization={viewCertificateDetails.certifierOrganization}
+                        sha256Hash={viewCertificateDetails.sha256Hash}
+                        verificationLink={viewCertificateDetails.verificationLink}
+                      />
+                      
+                      <div className="mt-6 flex flex-col items-center">
+                        <p className="text-sm text-gray-600 mb-2">Scan to verify certificate:</p>
+                        <div className="bg-white p-2 rounded-md">
+                          <QRCode 
+                            value={viewCertificateDetails.verificationLink || `https://doculegalize.com/verify/${viewCertificateDetails.verificationId}`} 
+                            size={120}
+                            style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+                            viewBox={`0 0 256 256`}
+                          />
+                        </div>
+                      </div>
+                    </div>
                     <div className="flex justify-center mt-6">
                       <Button 
                         className="bg-legal-primary hover:bg-legal-dark" 
@@ -371,6 +397,73 @@ const Certificates = () => {
               <p className="text-sm text-gray-500 mb-4">
                 Select a document to generate a new Section 65B certificate:
               </p>
+              
+              <div className="mb-4">
+                <h4 className="text-sm font-medium mb-2 text-legal-primary">Recently Uploaded Documents</h4>
+                <div className="space-y-2 max-h-[250px] overflow-y-auto">
+                  {isLoadingDocuments ? (
+                    <div className="text-center py-3">
+                      <p className="text-sm text-gray-500">Loading documents...</p>
+                    </div>
+                  ) : documents && documents.length > 0 ? (
+                    documents.slice(0, 5).map((doc: Document) => (
+                      <div 
+                        key={doc.id} 
+                        className="flex items-center p-2 border rounded-md hover:bg-gray-50 cursor-pointer"
+                      >
+                        {getFileIconByType(doc.type)}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{doc.name}</p>
+                          <div className="flex items-center text-xs text-gray-500 mt-0.5">
+                            <Calendar className="h-3 w-3 mr-1" />
+                            <span>{doc.date}</span>
+                            <span className="mx-1">•</span>
+                            <span>{doc.size}</span>
+                          </div>
+                        </div>
+                        <Button 
+                          className="ml-2" 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => {
+                            const now = new Date();
+                            const verificationId = "DL-" + Math.random().toString(36).substring(2, 10).toUpperCase();
+                            const newCert = {
+                              id: Math.floor(Math.random() * 1000),
+                              document: doc.name,
+                              date: format(now, "MMM dd, yyyy"),
+                              verificationId: verificationId,
+                              certifierName: "Current User",
+                              certifierDesignation: "Legal Administrator",
+                              certifierOrganization: "DocuLegalize Platform",
+                              sha256Hash: generateMockSHA256(),
+                              verificationLink: `https://doculegalize.com/verify/${verificationId}`,
+                              status: "valid"
+                            };
+                            
+                            saveCertificateToLocalStorage(newCert);
+                            handleViewCertificate(newCert);
+                            
+                            toast({
+                              title: "Certificate generated",
+                              description: `Certificate for ${doc.name} has been generated and saved to history.`,
+                            });
+                            setShowCertificateDialog(false);
+                          }}
+                        >
+                          Generate
+                        </Button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-3 border rounded-md">
+                      <p className="text-sm text-gray-500">No recent documents found</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              <h4 className="text-sm font-medium mb-2 text-legal-primary">Sample Documents</h4>
               <div className="space-y-2">
                 {["Contract Agreement - ABC Corp.pdf", "Property Deed - 123 Main St.jpg", "Court Filing - Case #45678.pdf", "Power of Attorney - Smith.pdf"].map((doc, i) => (
                   <div key={i} className="flex items-center p-2 border rounded-md hover:bg-gray-50 cursor-pointer">
