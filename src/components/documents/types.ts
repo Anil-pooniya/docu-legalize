@@ -43,6 +43,12 @@ export interface CertificateData {
   id: string;
   documentName: string;
   date: string;
+  documentId?: string;
+  verificationLink?: string;
+  sha256Hash?: string;
+  certifierName?: string;
+  certifierDesignation?: string;
+  certifierOrganization?: string;
 }
 
 export interface ExtractedDocumentData {

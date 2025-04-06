@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { DownloadIcon } from "lucide-react";
 import Section65BCertificate from "../../certificates/Section65BCertificate";
 import { CertificateData } from "../types";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface CertificateTabProps {
   certificateData: CertificateData;
@@ -16,9 +17,14 @@ const CertificateTab: React.FC<CertificateTabProps> = ({
   certificateRef,
   onDownloadCertificateAsPDF
 }) => {
+  const isMobile = useIsMobile();
+
   return (
     <div>
-      <div ref={certificateRef}>
+      <div 
+        ref={certificateRef} 
+        className={`certificate-container ${isMobile ? 'scale-90 origin-top' : ''}`}
+      >
         <Section65BCertificate
           documentName={certificateData.documentName}
           generatedDate={certificateData.date}

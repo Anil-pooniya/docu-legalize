@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import PageLayout from "@/components/layout/PageLayout";
 import Section65BCertificate from "@/components/certificates/Section65BCertificate";
@@ -26,16 +27,28 @@ const Certificates = () => {
     sha256Hash?: string;
     verificationLink?: string;
   } | null>(null);
+  const [savedCertificates, setSavedCertificates] = useState<Array<any>>([]);
   const { toast } = useToast();
   
   useEffect(() => {
-    const savedCertificates = localStorage.getItem('savedCertificates');
-    if (savedCertificates) {
-      const certificates = JSON.parse(savedCertificates);
-      if (certificates.length > 0 && !viewCertificateDetails) {
-        setViewCertificateDetails(certificates[0]);
+    // Load saved certificates from localStorage
+    const loadSavedCertificates = () => {
+      const savedCerts = localStorage.getItem('savedCertificates');
+      if (savedCerts) {
+        try {
+          const certificates = JSON.parse(savedCerts);
+          setSavedCertificates(certificates);
+          if (certificates.length > 0 && !viewCertificateDetails) {
+            setViewCertificateDetails(certificates[0]);
+          }
+        } catch (error) {
+          console.error("Error parsing saved certificates:", error);
+          localStorage.setItem('savedCertificates', JSON.stringify([]));
+        }
       }
-    }
+    };
+    
+    loadSavedCertificates();
   }, []);
 
   const handleGenerateNew = () => {
@@ -43,7 +56,7 @@ const Certificates = () => {
   };
 
   const handleViewCertificate = (certificate: {
-    id: number;
+    id: number | string;
     document: string;
     date: string;
     verificationId: string;
@@ -103,6 +116,27 @@ const Certificates = () => {
       toast({
         title: "Download failed",
         description: "There was an error downloading your certificate.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const saveCertificateToLocalStorage = (certificate: any) => {
+    try {
+      const existingCerts = JSON.parse(localStorage.getItem('savedCertificates') || '[]');
+      const updatedCerts = [certificate, ...existingCerts];
+      localStorage.setItem('savedCertificates', JSON.stringify(updatedCerts));
+      setSavedCertificates(updatedCerts);
+      
+      toast({
+        title: "Certificate saved",
+        description: "Certificate has been saved to your history."
+      });
+    } catch (error) {
+      console.error("Error saving certificate:", error);
+      toast({
+        title: "Error saving certificate",
+        description: "There was an error saving the certificate to history.",
         variant: "destructive"
       });
     }
@@ -202,7 +236,7 @@ const Certificates = () => {
               <TabsContent value="history" className="mt-0">
                 <Card>
                   <CardContent className="pt-6">
-                    <div className="overflow-hidden border rounded-md">
+                    <div className="overflow-auto border rounded-md">
                       <table className="w-full">
                         <thead>
                           <tr className="bg-muted/50">
@@ -214,7 +248,7 @@ const Certificates = () => {
                           </tr>
                         </thead>
                         <tbody className="divide-y">
-                          {[
+                          {[...savedCertificates, 
                             {
                               id: 1,
                               document: "Contract Agreement - ABC Corp.pdf",
@@ -253,8 +287,8 @@ const Certificates = () => {
                               verificationId: "DL-K2L5M9N1",
                               status: "revoked"
                             }
-                          ].map(cert => (
-                            <tr key={cert.id} className="hover:bg-muted/30">
+                          ].map((cert, index) => (
+                            <tr key={`${cert.id}-${index}`} className="hover:bg-muted/30">
                               <td className="p-3">
                                 <div className="flex items-center">
                                   <FileTextIcon className="h-5 w-5 text-legal-primary mr-2" />
@@ -274,17 +308,19 @@ const Certificates = () => {
                                     cert.status === "expired" ? "bg-amber-100 text-amber-800" : ""
                                   }
                                 >
-                                  {cert.status === "valid" && (
-                                    <CheckCircleIcon className="h-3 w-3 mr-1" />
-                                  )}
-                                  {cert.status === "expired" && (
-                                    <ClockIcon className="h-3 w-3 mr-1" />
-                                  )}
-                                  {cert.status === "revoked" && (
-                                    <AlertCircleIcon className="h-3 w-3 mr-1" />
-                                  )}
-                                  {cert.status === "valid" ? "Valid" : 
-                                   cert.status === "expired" ? "Expired" : "Revoked"}
+                                  <span className="flex items-center">
+                                    {cert.status === "valid" && (
+                                      <CheckCircleIcon className="h-3 w-3 mr-1" />
+                                    )}
+                                    {cert.status === "expired" && (
+                                      <ClockIcon className="h-3 w-3 mr-1" />
+                                    )}
+                                    {cert.status === "revoked" && (
+                                      <AlertCircleIcon className="h-3 w-3 mr-1" />
+                                    )}
+                                    {cert.status === "valid" ? "Valid" : 
+                                     cert.status === "expired" ? "Expired" : "Revoked"}
+                                  </span>
                                 </Badge>
                               </td>
                               <td className="p-3">
@@ -356,18 +392,16 @@ const Certificates = () => {
                           certifierDesignation: "Legal Administrator",
                           certifierOrganization: "DocuLegalize Platform",
                           sha256Hash: generateMockSHA256(),
-                          verificationLink: `https://doculegalize.com/verify/${verificationId}`
+                          verificationLink: `https://doculegalize.com/verify/${verificationId}`,
+                          status: "valid"
                         };
                         
-                        const savedCerts = JSON.parse(localStorage.getItem('savedCertificates') || '[]');
-                        savedCerts.push(newCert);
-                        localStorage.setItem('savedCertificates', JSON.stringify(savedCerts));
-                        
+                        saveCertificateToLocalStorage(newCert);
                         handleViewCertificate(newCert);
                         
                         toast({
                           title: "Certificate generated",
-                          description: `Certificate for ${doc} has been generated and saved to the database.`,
+                          description: `Certificate for ${doc} has been generated and saved to history.`,
                         });
                         setShowCertificateDialog(false);
                       }}
