@@ -1,0 +1,143 @@
+
+import ocrService from "@/services/ocrService";
+import { OCRMetadata, StructuredContent } from "../types";
+
+// Format a file size in bytes to a human-readable format
+export const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+// Create a mock file for text extraction
+export const createMockFile = (name: string, type: string): File => {
+  if (type === "pdf") {
+    // Create a more realistic PDF mock with some content
+    const pdfPlaceholderText = `Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+      Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+      Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.
+      
+      WHEREAS, the parties hereto wish to enter into this Agreement;
+      
+      NOW, THEREFORE, in consideration of the premises and the mutual covenants contained herein,
+      the parties hereto agree as follows:
+      
+      CLAUSE 1: DEFINITIONS
+      As used hereinafter in this Agreement, the following terms shall have the meanings set forth below:
+      
+      1.1 "Agreement" means this agreement, including all annexes, schedules, and exhibits.
+      1.2 "Effective Date" means the date on which this Agreement becomes effective.
+      
+      CLAUSE 2: TERM
+      This Agreement shall commence on the Effective Date and shall continue for a period of
+      five (5) years unless terminated earlier pursuant to the provisions of this Agreement.
+      
+      IN WITNESS WHEREOF, the parties have executed this Agreement as of the date first above written.
+      
+      SIGNED BY:
+      John Smith
+      CEO
+      Date: April 5, 2025`;
+    
+    const pdfBlob = new Blob([pdfPlaceholderText], { type: 'application/pdf' });
+    return new File([pdfBlob], name, { type: 'application/pdf' });
+  } else {
+    // For non-PDF files, use empty file
+    return new File([""], name, { 
+      type: type === "pdf" ? "application/pdf" : "image/jpeg" 
+    });
+  }
+};
+
+// Prepare content for download based on active tab and format
+export interface PrepareDownloadOptions {
+  activeTab: string;
+  formatType: 'plain' | 'structured' | 'json';
+  extractedText: string | null;
+  ocrMetadata: OCRMetadata | null;
+  structuredContent: StructuredContent | null;
+  documentName: string;
+  documentContent?: string;
+  certificateData?: {
+    id: string;
+    documentName: string;
+    date: string;
+  } | null;
+}
+
+export const prepareDownload = (options: PrepareDownloadOptions): {
+  content: string | Blob;
+  filename: string;
+} => {
+  const { 
+    activeTab, formatType, extractedText, ocrMetadata, 
+    structuredContent, documentName, documentContent, certificateData 
+  } = options;
+  
+  let content: string | Blob = "";
+  let filename = "";
+
+  if (activeTab === "textContent" && extractedText) {
+    if (formatType === 'structured' && ocrMetadata && structuredContent) {
+      content = ocrService.exportAsText({
+        text: extractedText,
+        confidence: ocrMetadata.confidence,
+        metadata: ocrMetadata as any,
+        structuredContent: structuredContent
+      });
+      filename = `${documentName.replace(/\.[^/.]+$/, '')}_structured.txt`;
+    } else if (formatType === 'json' && ocrMetadata && structuredContent) {
+      content = ocrService.convertToJSON({
+        text: extractedText,
+        confidence: ocrMetadata.confidence,
+        metadata: ocrMetadata as any,
+        structuredContent: structuredContent
+      });
+      filename = `${documentName.replace(/\.[^/.]+$/, '')}_data.json`;
+    } else {
+      content = extractedText;
+      filename = `${documentName.replace(/\.[^/.]+$/, '')}_plain.txt`;
+    }
+  } else if (activeTab === "metadata" && ocrMetadata) {
+    content = ocrService.getMetadataAsJSON({
+      text: extractedText || '',
+      confidence: ocrMetadata.confidence,
+      metadata: ocrMetadata as any,
+      structuredContent: structuredContent || { sections: [] }
+    });
+    filename = `${documentName.replace(/\.[^/.]+$/, '')}_metadata.json`;
+  } else if (activeTab === "certificate" && certificateData) {
+    content = generateCertificateText(certificateData);
+    filename = `certificate-${certificateData.id}.txt`;
+  } else {
+    content = documentContent || `Mock content for ${documentName}`;
+    filename = documentName || "document.txt";
+  }
+
+  return { content, filename };
+};
+
+// Generate certificate text
+export const generateCertificateText = (certificateData: {
+  id: string;
+  documentName: string;
+  date: string;
+}): string => {
+  return `SECTION 65B CERTIFICATE
+      
+Document: ${certificateData.documentName}
+Certificate ID: ${certificateData.id}
+Issued Date: ${certificateData.date}
+
+This is to certify that this electronic record is generated by a computer system in the ordinary course of activities of DocuLegalize.
+
+The computer output containing this information is produced by the computer in the ordinary course of the activities of the owner.
+
+The information contained in this electronic record is derived from the computer system during the period over which the computer was used regularly to store or process information for the purpose of any activities regularly carried on over that period by the person having lawful control over the use of the computer.
+
+During said period of time, information of the kind contained in the electronic record was regularly fed into the computer in the ordinary course of the said activities.
+
+The computer was operating properly and the accuracy of the information is not disputed.`;
+};
