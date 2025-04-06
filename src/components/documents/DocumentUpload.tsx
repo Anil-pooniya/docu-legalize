@@ -2,13 +2,14 @@ import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { UploadIcon, FileIcon, XIcon, FileTextIcon, ImageIcon, FileType2Icon, CheckIcon, Loader2 } from "lucide-react";
+import { UploadIcon, FileIcon, XIcon, FileTextIcon, ImageIcon, FileType2Icon, CheckIcon, Loader2, AlertTriangle } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useUploadDocument } from "@/services/documentService";
 import { useNavigate } from "react-router-dom";
 import ocrService from "@/services/ocrService";
 import { Badge } from "@/components/ui/badge";
 import api from "@/services/api";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const DocumentUpload: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
@@ -16,6 +17,7 @@ const DocumentUpload: React.FC = () => {
   const [isExtracting, setIsExtracting] = useState(false);
   const [preExtractedMetadata, setPreExtractedMetadata] = useState<Record<string, any> | null>(null);
   const [textPreview, setTextPreview] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const { toast } = useToast();
   const uploadMutation = useUploadDocument();
   const navigate = useNavigate();
@@ -43,6 +45,7 @@ const DocumentUpload: React.FC = () => {
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUploadError(null);
     if (e.target.files && e.target.files.length > 0) {
       const uploadedFile = e.target.files[0];
       if (validateFile(uploadedFile)) {
@@ -91,24 +94,44 @@ const DocumentUpload: React.FC = () => {
   const extractPreviewMetadata = async (file: File) => {
     try {
       setIsExtracting(true);
+      setUploadError(null);
       const metadata = await ocrService.extractFileMetadata(file);
       setPreExtractedMetadata(metadata);
       
       if (file.type.startsWith('image/') || file.type.includes('pdf')) {
-        const result = await api.performOCR(file);
-        setTextPreview(result.text.substring(0, 200) + (result.text.length > 200 ? '...' : ''));
-        
-        toast({
-          title: "Text extracted",
-          description: `Document preview extracted with ${Math.round(result.confidence * 100)}% confidence.`,
-        });
+        try {
+          const result = await api.performOCR(file);
+          setTextPreview(result.text.substring(0, 200) + (result.text.length > 200 ? '...' : ''));
+          
+          toast({
+            title: "Text extracted",
+            description: `Document preview extracted with ${Math.round(result.confidence * 100)}% confidence.`,
+          });
+        } catch (error) {
+          console.error("OCR extraction error:", error);
+          if (error instanceof Error) {
+            setUploadError(error.message);
+          } else {
+            setUploadError("Failed to extract text preview");
+          }
+          toast({
+            title: "Preview extraction limited",
+            description: "Could not fully extract text preview, but you can still upload the document.",
+            variant: "default",
+          });
+        }
       }
     } catch (error) {
       console.error("Error extracting preview metadata:", error);
+      if (error instanceof Error) {
+        setUploadError(error.message);
+      } else {
+        setUploadError("Could not extract document preview");
+      }
       toast({
-        title: "Extraction failed",
-        description: "Could not extract document preview",
-        variant: "destructive",
+        title: "Extraction limited",
+        description: "Limited preview available for this document type.",
+        variant: "default",
       });
     } finally {
       setIsExtracting(false);
@@ -148,6 +171,7 @@ const DocumentUpload: React.FC = () => {
     
     try {
       setIsExtracting(true);
+      setUploadError(null);
       toast({
         title: "Processing document",
         description: "Extracting text and metadata...",
@@ -157,12 +181,32 @@ const DocumentUpload: React.FC = () => {
       let ocrMetadata;
       
       try {
-        const ocrResult = await api.performOCR(file);
+        let processFile = file;
+        if (file.type.startsWith('image/')) {
+          try {
+            processFile = await ocrService.convertImageToPdf(file);
+          } catch (err) {
+            console.warn("Could not convert image to PDF, proceeding with original file", err);
+          }
+        }
+        
+        const ocrResult = await api.performOCR(processFile);
         documentContent = ocrResult.text;
         ocrMetadata = ocrResult.metadata;
+        
+        if (!documentContent && file.type === 'application/pdf') {
+          throw new Error("The PDF may be password-protected, corrupted, or contain only scanned images without embedded text.");
+        }
       } catch (error) {
         console.error("OCR extraction error:", error);
-        documentContent = `Content of ${file.name}`;
+        
+        if (error instanceof Error) {
+          setUploadError(error.message);
+        } else {
+          setUploadError("Text extraction failed, but document will still be uploaded.");
+        }
+        
+        documentContent = `Content extraction failed for ${file.name}`;
         ocrMetadata = await ocrService.extractFileMetadata(file);
       }
       
@@ -170,13 +214,16 @@ const DocumentUpload: React.FC = () => {
       
       toast({
         title: "Upload successful",
-        description: "Your document has been uploaded with extracted text.",
+        description: uploadError 
+          ? "Your document has been uploaded, but with limited text extraction." 
+          : "Your document has been uploaded with extracted text.",
         variant: "default"
       });
       
       setFile(null);
       setPreExtractedMetadata(null);
       setTextPreview(null);
+      setUploadError(null);
       
       navigate("/documents");
     } catch (error) {
@@ -262,6 +309,20 @@ const DocumentUpload: React.FC = () => {
                   <XIcon className="h-5 w-5 text-gray-500" />
                 </button>
               </div>
+              
+              {uploadError && (
+                <Alert variant="warning" className="mt-4">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Text Extraction Limited</AlertTitle>
+                  <AlertDescription className="text-sm">
+                    {uploadError}
+                    <p className="mt-1">
+                      You can still upload the document, but text extraction may be limited. If this is a scanned document, 
+                      you can try OCR after upload.
+                    </p>
+                  </AlertDescription>
+                </Alert>
+              )}
               
               {preExtractedMetadata && !isExtracting && (
                 <div className="mt-4 text-left bg-gray-50 p-4 rounded-md">

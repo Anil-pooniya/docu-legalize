@@ -36,8 +36,20 @@ const LEGAL_TERMS = [
  */
 async function extractText(file: File): Promise<OCRResult> {
   try {
+    // Check file validity and type before proceeding
+    if (!file) {
+      throw new Error("No file provided for text extraction");
+    }
+
     // Process the file with OCR
     const ocrResult = await api.performOCR(file);
+    
+    // Handle empty text result specifically for PDFs
+    if (!ocrResult.text && file.type === 'application/pdf') {
+      // Try to determine if the PDF is password-protected, scanned or corrupted
+      const possibleIssue = await detectPDFIssue(file);
+      throw new Error(`Unable to extract text: ${possibleIssue}`);
+    }
     
     // If we have text, try to structure it
     if (ocrResult.text) {
@@ -63,8 +75,74 @@ async function extractText(file: File): Promise<OCRResult> {
     return ocrResult;
   } catch (error) {
     console.error("Error in OCR processing:", error);
+    if (error instanceof Error) {
+      throw error; // Rethrow the error with the specific message
+    }
     throw new Error("Failed to extract text from document");
   }
+}
+
+/**
+ * Attempts to detect common issues with PDFs that prevent text extraction
+ */
+async function detectPDFIssue(file: File): Promise<string> {
+  // In a real implementation, we would use PDF.js or a similar library
+  // to perform deeper analysis of the PDF structure
+  
+  try {
+    // Mock implementation - in a real app, we would analyze the binary content
+    // of the PDF to detect encryption, scan-only content, etc.
+    
+    // For development purposes, use some basic checks
+    const firstBytes = await readFirstBytes(file, 1024);
+    const fileString = new TextDecoder().decode(firstBytes);
+    
+    if (fileString.includes('/Encrypt')) {
+      return "The PDF appears to be password-protected. Please provide an unprotected PDF.";
+    }
+    
+    if (fileString.includes('/Image') && !fileString.includes('/Text')) {
+      return "The PDF contains only scanned images. Use OCR to extract text from images.";
+    }
+    
+    if (!fileString.includes('%PDF-')) {
+      return "Invalid or corrupted PDF file. The file does not appear to be a valid PDF.";
+    }
+    
+    // If none of the above, provide a general message
+    return "Invalid PDF structure. This may be due to the PDF being password-protected, corrupted, or containing only scanned images without OCR.";
+  } catch (err) {
+    console.error("Error analyzing PDF:", err);
+    return "Unable to analyze PDF structure. The file may be corrupted.";
+  }
+}
+
+/**
+ * Read the first N bytes of a file
+ */
+async function readFirstBytes(file: File, bytesToRead: number): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+      if (!e.target || !e.target.result) {
+        reject(new Error("Failed to read file"));
+        return;
+      }
+      
+      // Get first N bytes
+      const array = new Uint8Array(e.target.result as ArrayBuffer);
+      resolve(array.slice(0, bytesToRead));
+    };
+    
+    reader.onerror = () => {
+      reject(new Error("Error reading file"));
+    };
+    
+    // Read as array buffer to access binary data
+    const blob = file.slice(0, bytesToRead);
+    reader.readAsArrayBuffer(blob);
+  });
 }
 
 /**
@@ -691,11 +769,27 @@ function estimatePageCount(fileSize: number, mimeType: string): number {
   return 1;
 }
 
+/**
+ * Convert image files to PDFs for better OCR handling
+ */
+async function convertImageToPdf(imageFile: File): Promise<File> {
+  // This would use a library like pdf-lib in a real implementation
+  // For our mock implementation, we just create a new file with PDF mime type
+  console.log("Converting image to PDF for OCR processing");
+  
+  // Just return the original file for now - in a real app we would
+  // create an actual PDF from the image
+  return new File([imageFile], imageFile.name.replace(/\.[^/.]+$/, ".pdf"), {
+    type: "application/pdf"
+  });
+}
+
 export default {
   extractText,
   extractFileMetadata,
   saveExtractedText,
   convertToJSON,
   exportAsText,
-  getMetadataAsJSON
+  getMetadataAsJSON,
+  convertImageToPdf
 };

@@ -15,7 +15,9 @@ export interface OCRMetadata {
   lastModified?: string;
   totalWords?: number;
   totalChars?: number;
-  legalTerms?: string[]; // Added for legal term recognition
+  legalTerms?: string[]; // For legal term recognition
+  encrypted?: boolean; // Whether the document is encrypted/password-protected
+  scannedOnly?: boolean; // Whether the document contains only scanned images
 }
 
 export interface StructuredContent {
@@ -26,7 +28,7 @@ export interface StructuredContent {
   legalReferences?: string[];
   definitions?: Record<string, string>;
   keyInformation?: Record<string, string>;
-  clauses?: { number: string; title?: string; content: string; subclauses?: { number: string; content: string }[] }[]; // Added for better clause structure
+  clauses?: { number: string; title?: string; content: string; subclauses?: { number: string; content: string }[] }[]; // For better clause structure
 }
 
 export interface DocumentPreviewProps {

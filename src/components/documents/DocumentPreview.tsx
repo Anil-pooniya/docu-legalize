@@ -33,6 +33,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
   const [ocrMetadata, setOcrMetadata] = useState<OCRMetadata | null>(null);
   const [structuredContent, setStructuredContent] = useState<StructuredContent | null>(null);
   const [certificateData, setCertificateData] = useState<CertificateData | null>(null);
+  const [extractionError, setExtractionError] = useState<string | null>(null);
   const certificateRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   
@@ -76,12 +77,19 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
     if (!documentData) return;
     
     setIsExtracting(true);
+    setExtractionError(null);
     try {
       // Create mock file with appropriate content
       const mockFile = createMockFile(documentData.name, documentData.type);
       
       // Extract text
       const result = await ocrService.extractText(mockFile);
+      
+      // Check if we got meaningful text
+      if (!result.text || result.text.trim().length === 0) {
+        throw new Error("No text could be extracted from this document.");
+      }
+      
       setExtractedText(result.text);
       
       // Set metadata
@@ -100,7 +108,8 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
         format: result.metadata.format,
         lastModified: result.metadata.lastModified,
         totalWords: result.metadata.totalWords,
-        totalChars: result.metadata.totalChars
+        totalChars: result.metadata.totalChars,
+        legalTerms: result.metadata.legalTerms
       });
       
       // Set structured content if available
@@ -120,9 +129,14 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
       
       setActiveTab("textContent");
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred";
+      console.error("Text extraction error:", err);
+      
+      setExtractionError(errorMessage);
+      
       toast({
         title: "Extraction failed",
-        description: err instanceof Error ? err.message : "An unexpected error occurred",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -311,6 +325,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
               onExtractText={handleExtractText}
               isExtracting={isExtracting}
               ocrMetadata={ocrMetadata}
+              extractionError={extractionError}
             />
           </TabsContent>
           
@@ -344,6 +359,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId = "1" }) =
                 onExtractText={handleExtractText}
                 isSaving={isSaving}
                 isExtracting={isExtracting}
+                extractionError={extractionError}
               />
             </div>
           </TabsContent>

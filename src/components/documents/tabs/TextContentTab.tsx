@@ -1,8 +1,9 @@
 
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { FileText, AlignLeft, ScrollText, Code, DownloadIcon, Save, Loader2, FileSearch } from "lucide-react";
+import { FileText, AlignLeft, ScrollText, Code, DownloadIcon, Save, Loader2, FileSearch, AlertTriangle } from "lucide-react";
 import { OCRMetadata, StructuredContent } from "../types";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface TextContentTabProps {
   extractedText: string | null;
@@ -16,6 +17,7 @@ interface TextContentTabProps {
   onExtractText: () => void;
   isSaving: boolean;
   isExtracting: boolean;
+  extractionError?: string | null;
 }
 
 const TextContentTab: React.FC<TextContentTabProps> = ({
@@ -29,7 +31,8 @@ const TextContentTab: React.FC<TextContentTabProps> = ({
   onSaveContent,
   onExtractText,
   isSaving,
-  isExtracting
+  isExtracting,
+  extractionError
 }) => {
   if (extractedText) {
     return (
@@ -282,23 +285,48 @@ const TextContentTab: React.FC<TextContentTabProps> = ({
   } else {
     return (
       <div className="text-center py-8">
-        <p className="text-gray-500 mb-4">No text content extracted yet.</p>
-        <Button 
-          onClick={onExtractText}
-          disabled={isExtracting}
-        >
-          {isExtracting ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-              Extracting...
-            </>
-          ) : (
-            <>
-              <FileSearch className="h-4 w-4 mr-1.5" />
-              Extract Document Text
-            </>
-          )}
-        </Button>
+        {extractionError ? (
+          <div className="mb-6 max-w-md mx-auto">
+            <Alert variant="warning">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Text Extraction Failed</AlertTitle>
+              <AlertDescription>
+                {extractionError}
+                <p className="mt-2 text-sm">
+                  This may be due to the document format, encryption, or containing only scanned images without embedded text.
+                  You can try using a different document format or pre-process the document to ensure it contains extractable text.
+                </p>
+              </AlertDescription>
+            </Alert>
+            <Button 
+              onClick={onExtractText}
+              disabled={isExtracting}
+              className="mt-4"
+            >
+              Try Again
+            </Button>
+          </div>
+        ) : (
+          <>
+            <p className="text-gray-500 mb-4">No text content extracted yet.</p>
+            <Button 
+              onClick={onExtractText}
+              disabled={isExtracting}
+            >
+              {isExtracting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  Extracting...
+                </>
+              ) : (
+                <>
+                  <FileSearch className="h-4 w-4 mr-1.5" />
+                  Extract Document Text
+                </>
+              )}
+            </Button>
+          </>
+        )}
       </div>
     );
   }
